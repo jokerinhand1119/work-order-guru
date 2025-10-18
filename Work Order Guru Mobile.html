@@ -1456,67 +1456,62 @@
 
             // County autofill from ZIP in address (on input and blur)
             let lastZip = '';
-            let lastCountyFromZip = '';
-            let countyManuallyEdited = false;
-
-            // Use correct field IDs for mobile
+            let zipLookupTimeout = null;
             const countyInput = document.getElementById('county');
             const addressInput = document.getElementById('address');
 
-            if (countyInput && addressInput) {
-                countyInput.addEventListener('input', function() {
-                    if (countyInput.value !== lastCountyFromZip) {
-                        countyManuallyEdited = true;
+            function extractAndLookupZip() {
+                if (!addressInput) return;
+                const address = addressInput.value;
+                if (!address) return;
+                // Support 5-digit and ZIP+4
+                const zipMatch = address.match(/\b(\d{5})(?:-\d{4})?\b/);
+                if (zipMatch) {
+                    const zipCode = zipMatch[1];
+                    if (zipCode !== lastZip) {
+                        lastZip = zipCode;
+                        if (zipLookupTimeout) clearTimeout(zipLookupTimeout);
+                        // Debounce: wait 1.5s after typing
+                        zipLookupTimeout = setTimeout(() => {
+                            lookupCountyFromZip(zipCode);
+                        }, 1500);
                     }
-                });
+                }
+            }
 
-                async function autofillCountyFromAddress() {
-                    const address = addressInput.value;
-                    const zipMatch = address.match(/\b\d{5}\b/);
-                    if (zipMatch) {
-                        const zip = zipMatch[0];
-                        if (zip !== lastZip) {
-                            lastZip = zip;
-                            if (!countyManuallyEdited) {
-                                countyInput.value = '...';
-                            }
-                            try {
-                                const zipResp = await fetch(`https://api.zippopotam.us/us/${zip}`);
-                                if (!zipResp.ok) throw new Error('ZIP not found');
-                                const zipData = await zipResp.json();
-                                if (zipData.places && zipData.places.length > 0) {
-                                    const lat = zipData.places[0].latitude;
-                                    const lon = zipData.places[0].longitude;
-                                    const fccResp = await fetch(`https://geo.fcc.gov/api/census/area?lat=${lat}&lon=${lon}&format=json`);
-                                    if (fccResp.ok) {
-                                        const fccData = await fccResp.json();
-                                        if (fccData.results && fccData.results.length > 0) {
-                                            let countyName = fccData.results[0].county_name;
-                                            countyName = countyName.replace(/ County$/i, '');
-                                            lastCountyFromZip = countyName.toUpperCase();
-                                            if (!countyManuallyEdited) {
-                                                countyInput.value = lastCountyFromZip;
-                                            }
-                                        } else if (!countyManuallyEdited) {
-                                            countyInput.value = '';
-                                        }
-                                    } else if (!countyManuallyEdited) {
-                                        countyInput.value = '';
-                                    }
-                                } else if (!countyManuallyEdited) {
-                                    countyInput.value = '';
-                                }
-                            } catch (err) {
-                                console.error('County lookup error:', err);
-                                if (!countyManuallyEdited) {
-                                    countyInput.value = '';
-                                }
+            async function lookupCountyFromZip(zip) {
+                if (!countyInput) return;
+                try {
+                    console.log('Fetching lat/lon for ZIP', zip);
+                    const zipResp = await fetch(`https://api.zippopotam.us/us/${zip}`);
+                    if (!zipResp.ok) throw new Error('ZIP not found');
+                    const zipData = await zipResp.json();
+                    if (zipData.places && zipData.places.length > 0) {
+                        const lat = zipData.places[0].latitude;
+                        const lon = zipData.places[0].longitude;
+                        console.log('Lat/lon:', lat, lon);
+                        const fccResp = await fetch(`https://geo.fcc.gov/api/census/area?lat=${lat}&lon=${lon}&format=json`);
+                        if (fccResp.ok) {
+                            const fccData = await fccResp.json();
+                            if (fccData.results && fccData.results.length > 0) {
+                                let countyName = fccData.results[0].county_name;
+                                countyName = countyName.replace(/ County$/i, '');
+                                countyInput.value = countyName.toUpperCase();
+                                console.log('County autofilled:', countyInput.value);
                             }
                         }
                     }
+                } catch (err) {
+                    console.error('County lookup error:', err);
                 }
-                addressInput.addEventListener('input', autofillCountyFromAddress);
-                addressInput.addEventListener('blur', autofillCountyFromAddress);
+            }
+
+            if (addressInput) {
+                addressInput.addEventListener('input', extractAndLookupZip);
+                addressInput.addEventListener('blur', function() {
+                    if (zipLookupTimeout) clearTimeout(zipLookupTimeout);
+                    extractAndLookupZip();
+                });
             }
         });
     </script>
