@@ -1162,8 +1162,8 @@
         window.addEventListener('beforeprint', function() {
             // All basic text fields that map directly
             const basicFields = [
-                'customer_name', 'address', 'phone_number', 'work_order_number', 'date',
-                'vin_number', 'mileage', 'county', 'license_plate',
+                'customer_name', 'phone_number', 'work_order_number', 'date',
+                'vin_number', 'mileage', 'license_plate',
                 'tire_tread_lf', 'tire_tread_rf', 'tire_tread_lr', 'tire_tread_rr',
                 'brakes_lf', 'brakes_rf', 'brakes_lr', 'brakes_rr',
                 'services_performed', 'tech_name',
@@ -1173,7 +1173,8 @@
                 'old_inspection_exp', 'old_inspection_miles', 
                 'tire_psi_front', 'tire_psi_rear'
             ];
-            
+
+            // Sync all basic fields except address/county
             basicFields.forEach(field => {
                 const input = document.getElementById(field);
                 const printField = document.getElementById('print_' + field);
@@ -1181,6 +1182,18 @@
                     printField.textContent = input.value || '';
                 }
             });
+
+            // Sync address and county from correct fields
+            const inputAddress = document.getElementById('input_address');
+            const printAddress = document.getElementById('print_address');
+            if (inputAddress && printAddress) {
+                printAddress.textContent = inputAddress.value || '';
+            }
+            const inputCounty = document.getElementById('input_county');
+            const printCounty = document.getElementById('print_county');
+            if (inputCounty && printCounty) {
+                printCounty.textContent = inputCounty.value || '';
+            }
             
             // Year/Make/Model combined field
             const year = document.getElementById('year')?.value || '';
