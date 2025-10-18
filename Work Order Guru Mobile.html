@@ -585,6 +585,10 @@
                         <input type="text" class="form-input" id="customer_name" placeholder="Name">
                     </div>
                     <div class="form-group">
+                        <label class="form-label">Address</label>
+                        <input type="text" class="form-input" id="address" placeholder="Full Address">
+                    </div>
+                    <div class="form-group">
                         <label class="form-label">Phone</label>
                         <input type="tel" class="form-input" id="phone_number" placeholder="Phone">
                     </div>
@@ -1153,7 +1157,7 @@
         window.addEventListener('beforeprint', function() {
             // All basic text fields that map directly
             const basicFields = [
-                'customer_name', 'phone_number', 'work_order_number', 'date',
+                'customer_name', 'address', 'phone_number', 'work_order_number', 'date',
                 'vin_number', 'mileage', 'county', 'license_plate',
                 'tire_tread_lf', 'tire_tread_rf', 'tire_tread_lr', 'tire_tread_rr',
                 'brakes_lf', 'brakes_rf', 'brakes_lr', 'brakes_rr',
@@ -1222,6 +1226,7 @@
             // Get all values
             const date = getValue('date');
             const customerName = getValue('customer_name');
+            const address = getValue('address');
             const phoneNumber = getValue('phone_number');
             const woNumber = getValue('work_order_number') || Date.now().toString();
             const vinNumber = getValue('vin_number');
@@ -1246,7 +1251,7 @@
                 input_new_s_i_number: getValue('inspection_number'),
                 input_new_s_i_exp: getValue('inspection_exp'),
                 input_customer_name: customerName,
-                input_address: phoneNumber,
+                input_address: address,
                 input_year_make_model_trim: `${year} ${make} ${model}`.trim(),
                 input_vin_number: vinNumber,
                 input_engine_size: getValue('engine_size'),
@@ -1367,7 +1372,8 @@
                 // Load from original format
                 setValue('date', data.input_date || data.date);
                 setValue('customer_name', data.input_customer_name || data.customer_name);
-                setValue('phone_number', data.input_address || data.phone_number);
+                setValue('address', data.input_address || data.address);
+                setValue('phone_number', data.phone_number);
                 setValue('work_order_number', data.input_ro || data.work_order_number);
                 setValue('vin_number', data.input_vin_number || data.vin_number);
                 setValue('mileage', data.input_odometer || data.mileage);
