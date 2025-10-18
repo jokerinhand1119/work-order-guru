@@ -925,17 +925,31 @@
                     if (barcodes.length > 0) {
                         for (const barcode of barcodes) {
                             const code = barcode.rawValue.toUpperCase().trim();
-                            console.log('Detected barcode:', code, 'format:', barcode.format);
+                            console.log('Detected barcode:', code, 'Length:', code.length, 'Format:', barcode.format);
                             
                             if (scanStatus) {
                                 scanStatus.style.display = 'block';
-                                scanStatus.textContent = 'Reading: ' + code.substring(0, 12) + '...';
+                                scanStatus.textContent = 'Reading: ' + code.substring(0, 15) + '...';
                                 scanStatus.style.background = 'rgba(255, 193, 7, 0.3)';
                                 scanStatus.style.color = '#ffc107';
                             }
                             
                             // Clean the barcode - VINs should only contain valid characters
-                            const cleanCode = code.replace(/[^A-HJ-NPR-Z0-9]/g, '');
+                            let cleanCode = code.replace(/[^A-HJ-NPR-Z0-9]/g, '');
+                            
+                            console.log('Cleaned barcode:', cleanCode, 'Length:', cleanCode.length);
+                            
+                            // If exactly 18 chars and starts with a digit, it might be a check digit - try removing it
+                            if (cleanCode.length === 18) {
+                                // Try removing first character
+                                const withoutFirst = cleanCode.substring(1);
+                                console.log('18 chars detected - trying without first char:', withoutFirst);
+                                
+                                if (/^[A-HJ-NPR-Z0-9]{17}$/.test(withoutFirst)) {
+                                    cleanCode = withoutFirst;
+                                    console.log('Using VIN without first character:', cleanCode);
+                                }
+                            }
                             
                             // Look for exactly 17 valid VIN characters
                             if (cleanCode.length === 17 && /^[A-HJ-NPR-Z0-9]{17}$/.test(cleanCode)) {
