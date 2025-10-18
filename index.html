@@ -1242,7 +1242,52 @@
         // Initialize when page loads - but after other scripts
         window.addEventListener('load', function() {
             setupAutoResize();
+            setupTireTreadAutoFormat();
         });
+        
+        // Auto-add "/32" to tire tread measurements
+        function setupTireTreadAutoFormat() {
+            const tireTreadFields = [
+                document.getElementById('input_tire_tread_lf'),
+                document.getElementById('input_tire_tread_rf'),
+                document.getElementById('input_tire_tread_lr'),
+                document.getElementById('input_tire_tread_rr')
+            ];
+            
+            tireTreadFields.forEach(function(field) {
+                if (!field) return;
+                
+                field.addEventListener('blur', function() {
+                    let value = this.value.trim();
+                    
+                    // Only process if there's a value and it doesn't already have "/32"
+                    if (value && !value.includes('/')) {
+                        // Remove any existing "/32" just in case
+                        value = value.replace('/32', '').trim();
+                        
+                        // If it's a number, add /32
+                        if (/^\d+(\.\d+)?$/.test(value)) {
+                            this.value = value + '/32';
+                        }
+                    }
+                });
+                
+                // Also handle Enter key
+                field.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        this.blur(); // Trigger the blur event which adds /32
+                        
+                        // Move to next field
+                        const form = this.form;
+                        const index = Array.prototype.indexOf.call(form, this);
+                        if (form.elements[index + 1]) {
+                            form.elements[index + 1].focus();
+                        }
+                    }
+                });
+            });
+        }
         
         // Keyboard shortcuts
         document.addEventListener('keydown', function(e) {
