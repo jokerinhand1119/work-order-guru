@@ -594,7 +594,7 @@
                     </div>
                     <div class="form-group">
                         <label class="form-label">County</label>
-                        <input type="text" class="form-input" id="county" placeholder="County" readonly>
+                        <input type="text" class="form-input" id="county" placeholder="County">
                     </div>
                     <div class="form-row">
                         <div class="form-group">
@@ -1116,7 +1116,7 @@
 
                 showToast('Vehicle info loaded!');
 
-                // No longer auto-fill county from VIN
+                // Do not autofill county from VIN
             } catch (err) {
                 console.error('VIN decode error:', err);
                 showToast('Could not decode VIN');
