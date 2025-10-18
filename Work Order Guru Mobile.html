@@ -885,13 +885,25 @@
             firebase.initializeApp(firebaseConfig);
             database = firebase.database();
             
-            // Status indicator
+            // Status indicator with timeout
+            let connectionTimeout = setTimeout(() => {
+                const statusText = document.getElementById('firebase-status-text');
+                if (statusText && statusText.textContent === 'Connecting...') {
+                    statusText.textContent = 'Check Firebase Rules';
+                    statusText.style.color = '#ff9800';
+                }
+            }, 10000); // 10 second timeout
+            
             database.ref('.info/connected').on('value', (snapshot) => {
                 const indicator = document.getElementById('status-indicator');
                 const statusText = document.getElementById('firebase-status-text');
                 if (snapshot.val() === true) {
+                    clearTimeout(connectionTimeout);
                     if (indicator) indicator.classList.add('connected');
-                    if (statusText) statusText.textContent = 'Connected';
+                    if (statusText) {
+                        statusText.textContent = 'Connected';
+                        statusText.style.color = '';
+                    }
                 } else {
                     if (indicator) indicator.classList.remove('connected');
                     if (statusText) statusText.textContent = 'Connecting...';
