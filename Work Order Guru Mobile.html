@@ -1459,45 +1459,46 @@
             let lastCountyFromZip = '';
             let countyManuallyEdited = false;
 
+            // Use correct field IDs for mobile
             const countyInput = document.getElementById('county');
             const addressInput = document.getElementById('address');
 
-            // Detect manual edits to county
-            countyInput.addEventListener('input', function() {
-                // If user types something different than last autofilled value, treat as manual
-                if (countyInput.value !== lastCountyFromZip) {
-                    countyManuallyEdited = true;
-                }
-            });
+            if (countyInput && addressInput) {
+                countyInput.addEventListener('input', function() {
+                    if (countyInput.value !== lastCountyFromZip) {
+                        countyManuallyEdited = true;
+                    }
+                });
 
-            async function autofillCountyFromAddress() {
-                const address = addressInput.value;
-                const zipMatch = address.match(/\b\d{5}\b/);
-                if (zipMatch) {
-                    const zip = zipMatch[0];
-                    if (zip !== lastZip) {
-                        lastZip = zip;
-                        if (!countyManuallyEdited) {
-                            countyInput.value = '...'; // loading indicator
-                        }
-                        try {
-                            // Step 1: Get lat/lon from Zippopotam.us
-                            const zipResp = await fetch(`https://api.zippopotam.us/us/${zip}`);
-                            if (!zipResp.ok) throw new Error('ZIP not found');
-                            const zipData = await zipResp.json();
-                            if (zipData.places && zipData.places.length > 0) {
-                                const lat = zipData.places[0].latitude;
-                                const lon = zipData.places[0].longitude;
-                                // Step 2: Get county from FCC API
-                                const fccResp = await fetch(`https://geo.fcc.gov/api/census/area?lat=${lat}&lon=${lon}&format=json`);
-                                if (fccResp.ok) {
-                                    const fccData = await fccResp.json();
-                                    if (fccData.results && fccData.results.length > 0) {
-                                        let countyName = fccData.results[0].county_name;
-                                        countyName = countyName.replace(/ County$/i, '');
-                                        lastCountyFromZip = countyName.toUpperCase();
-                                        if (!countyManuallyEdited) {
-                                            countyInput.value = lastCountyFromZip;
+                async function autofillCountyFromAddress() {
+                    const address = addressInput.value;
+                    const zipMatch = address.match(/\b\d{5}\b/);
+                    if (zipMatch) {
+                        const zip = zipMatch[0];
+                        if (zip !== lastZip) {
+                            lastZip = zip;
+                            if (!countyManuallyEdited) {
+                                countyInput.value = '...';
+                            }
+                            try {
+                                const zipResp = await fetch(`https://api.zippopotam.us/us/${zip}`);
+                                if (!zipResp.ok) throw new Error('ZIP not found');
+                                const zipData = await zipResp.json();
+                                if (zipData.places && zipData.places.length > 0) {
+                                    const lat = zipData.places[0].latitude;
+                                    const lon = zipData.places[0].longitude;
+                                    const fccResp = await fetch(`https://geo.fcc.gov/api/census/area?lat=${lat}&lon=${lon}&format=json`);
+                                    if (fccResp.ok) {
+                                        const fccData = await fccResp.json();
+                                        if (fccData.results && fccData.results.length > 0) {
+                                            let countyName = fccData.results[0].county_name;
+                                            countyName = countyName.replace(/ County$/i, '');
+                                            lastCountyFromZip = countyName.toUpperCase();
+                                            if (!countyManuallyEdited) {
+                                                countyInput.value = lastCountyFromZip;
+                                            }
+                                        } else if (!countyManuallyEdited) {
+                                            countyInput.value = '';
                                         }
                                     } else if (!countyManuallyEdited) {
                                         countyInput.value = '';
@@ -1505,20 +1506,18 @@
                                 } else if (!countyManuallyEdited) {
                                     countyInput.value = '';
                                 }
-                            } else if (!countyManuallyEdited) {
-                                countyInput.value = '';
-                            }
-                        } catch (err) {
-                            console.error('County lookup error:', err);
-                            if (!countyManuallyEdited) {
-                                countyInput.value = '';
+                            } catch (err) {
+                                console.error('County lookup error:', err);
+                                if (!countyManuallyEdited) {
+                                    countyInput.value = '';
+                                }
                             }
                         }
                     }
                 }
+                addressInput.addEventListener('input', autofillCountyFromAddress);
+                addressInput.addEventListener('blur', autofillCountyFromAddress);
             }
-            addressInput.addEventListener('input', autofillCountyFromAddress);
-            addressInput.addEventListener('blur', autofillCountyFromAddress);
         });
     </script>
 </body>
