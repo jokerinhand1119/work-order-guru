@@ -1243,6 +1243,7 @@
         window.addEventListener('load', function() {
             setupAutoResize();
             setupTireTreadAutoFormat();
+            setupBrakeAutoFormat();
         });
         
         // Auto-add "/32" to tire tread measurements
@@ -1277,6 +1278,47 @@
                     if (e.key === 'Enter') {
                         e.preventDefault();
                         this.blur(); // Trigger the blur event which adds /32
+                        
+                        // Move to next field
+                        const form = this.form;
+                        const index = Array.prototype.indexOf.call(form, this);
+                        if (form.elements[index + 1]) {
+                            form.elements[index + 1].focus();
+                        }
+                    }
+                });
+            });
+        }
+        
+        // Auto-add "B" to brake measurements
+        function setupBrakeAutoFormat() {
+            const brakeFields = [
+                document.getElementById('input_brakes_lf'),
+                document.getElementById('input_brakes_rf'),
+                document.getElementById('input_brakes_lr'),
+                document.getElementById('input_brakes_rr')
+            ];
+            
+            brakeFields.forEach(function(field) {
+                if (!field) return;
+                
+                field.addEventListener('blur', function() {
+                    let value = this.value.trim().toUpperCase();
+                    
+                    // Only process if there's a value and it doesn't already end with "B"
+                    if (value && !value.endsWith('B')) {
+                        // If it's a number (with optional decimal), add B
+                        if (/^\d+(\.\d+)?$/.test(value)) {
+                            this.value = value + 'B';
+                        }
+                    }
+                });
+                
+                // Also handle Enter key
+                field.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        this.blur(); // Trigger the blur event which adds B
                         
                         // Move to next field
                         const form = this.form;
