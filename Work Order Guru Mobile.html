@@ -1387,6 +1387,13 @@
                 setValue('engine_size', data.input_engine_size);
                 setValue('tire_psi_front', data.input_tire_psi_front);
                 setValue('tire_psi_rear', data.input_tire_psi_rear);
+                setValue('inspection_number', data.input_new_s_i_number);
+                setValue('inspection_exp', data.input_new_s_i_exp);
+                setValue('inspection_date', data.input_new_s_i_date);
+                setValue('emissions_number', data.input_new_s_em_number);
+                setValue('emissions_date', data.input_new_state_em_date);
+                setValue('old_inspection_exp', data.input_old_s_i_exp_date);
+                setValue('old_inspection_miles', data.input_old_s_i_miles);
                 
                 // Split year/make/model from original format
                 if (data.input_year_make_model_trim) {
