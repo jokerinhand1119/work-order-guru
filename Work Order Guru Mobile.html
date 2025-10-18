@@ -1,0 +1,1078 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#1976d2">
+    <title>Work Order Guru - Mobile</title>
+    
+    <!-- Barcode Scanner Library -->
+    <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
+    
+    <style>
+        /* ===== MOBILE UI STYLES (Screen Only) ===== */
+        @media screen {
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+                -webkit-tap-highlight-color: transparent;
+            }
+            
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
+                padding-bottom: 80px;
+            }
+            
+            /* Top App Bar */
+            .app-bar {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                height: 56px;
+                background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
+                color: white;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 0 16px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+                z-index: 1000;
+            }
+            
+            .app-bar h1 {
+                font-size: 20px;
+                font-weight: 500;
+            }
+            
+            .icon-btn {
+                width: 40px;
+                height: 40px;
+                border-radius: 50%;
+                background: rgba(255,255,255,0.1);
+                border: none;
+                color: white;
+                font-size: 18px;
+                cursor: pointer;
+                transition: all 0.2s;
+            }
+            
+            .icon-btn:active {
+                background: rgba(255,255,255,0.2);
+                transform: scale(0.95);
+            }
+            
+            /* Content Area */
+            .content {
+                margin-top: 56px;
+                padding: 16px;
+            }
+            
+            /* Status Card */
+            .status-card {
+                background: white;
+                border-radius: 12px;
+                padding: 16px;
+                margin-bottom: 16px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+            }
+            
+            .status-indicator {
+                width: 12px;
+                height: 12px;
+                border-radius: 50%;
+                background: #ffc107;
+                animation: pulse 2s infinite;
+            }
+            
+            .status-indicator.connected { background: #4caf50; }
+            
+            @keyframes pulse {
+                0%, 100% { opacity: 1; }
+                50% { opacity: 0.5; }
+            }
+            
+            /* Section Cards */
+            .section-card {
+                background: white;
+                border-radius: 12px;
+                margin-bottom: 16px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                overflow: hidden;
+            }
+            
+            .section-header {
+                padding: 16px;
+                background: linear-gradient(135deg, #f5f5f5 0%, #eeeeee 100%);
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                cursor: pointer;
+            }
+            
+            .section-header:active {
+                background: #e0e0e0;
+            }
+            
+            .section-title {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                font-size: 16px;
+                font-weight: 600;
+            }
+            
+            .section-icon {
+                font-size: 24px;
+            }
+            
+            .expand-icon {
+                font-size: 24px;
+                color: #666;
+                transition: transform 0.3s;
+            }
+            
+            .section-card.expanded .expand-icon {
+                transform: rotate(180deg);
+            }
+            
+            .section-content {
+                max-height: 0;
+                overflow: hidden;
+                transition: max-height 0.3s ease;
+            }
+            
+            .section-card.expanded .section-content {
+                max-height: 2000px;
+            }
+            
+            .section-body {
+                padding: 16px;
+            }
+            
+            /* Form Fields */
+            .form-group {
+                margin-bottom: 20px;
+            }
+            
+            .form-label {
+                display: block;
+                font-size: 13px;
+                font-weight: 600;
+                color: #666;
+                margin-bottom: 8px;
+                text-transform: uppercase;
+            }
+            
+            .form-input {
+                width: 100%;
+                padding: 12px 16px;
+                border: 2px solid #e0e0e0;
+                border-radius: 8px;
+                font-size: 16px;
+                transition: all 0.2s;
+                background: #fafafa;
+            }
+            
+            .form-input:focus {
+                outline: none;
+                border-color: #1976d2;
+                background: white;
+                box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.1);
+            }
+            
+            .form-input-group {
+                position: relative;
+            }
+            
+            .input-icon {
+                position: absolute;
+                right: 12px;
+                top: 50%;
+                transform: translateY(-50%);
+                width: 40px;
+                height: 40px;
+                background: linear-gradient(135deg, #00ff88 0%, #00cc6a 100%);
+                border-radius: 8px;
+                border: none;
+                color: white;
+                font-size: 20px;
+                cursor: pointer;
+                box-shadow: 0 2px 8px rgba(0, 255, 136, 0.3);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            
+            .form-input.has-icon {
+                padding-right: 60px;
+            }
+            
+            textarea.form-input {
+                min-height: 100px;
+                resize: vertical;
+            }
+            
+            .form-row {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 12px;
+            }
+            
+            .form-row-4 {
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 8px;
+            }
+            
+            select.form-input {
+                appearance: none;
+                background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Cpath fill='%23666' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+                background-repeat: no-repeat;
+                background-position: right 8px center;
+                padding-right: 40px;
+            }
+            
+            /* FAB */
+            .fab {
+                position: fixed;
+                bottom: 80px;
+                right: 16px;
+                width: 56px;
+                height: 56px;
+                border-radius: 50%;
+                background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%);
+                color: white;
+                border: none;
+                font-size: 24px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                cursor: pointer;
+                z-index: 900;
+            }
+            
+            /* Bottom Nav */
+            .bottom-nav {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                height: 64px;
+                background: white;
+                border-top: 1px solid #e0e0e0;
+                display: flex;
+                box-shadow: 0 -2px 8px rgba(0,0,0,0.1);
+                z-index: 1000;
+            }
+            
+            .nav-item {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: 4px;
+                border: none;
+                background: none;
+                color: #666;
+                cursor: pointer;
+                font-size: 12px;
+            }
+            
+            .nav-item:active {
+                background: #f5f5f5;
+            }
+            
+            .nav-icon {
+                font-size: 24px;
+            }
+            
+            /* Scanner Overlay */
+            .scanner-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.95);
+                z-index: 2000;
+                display: none;
+                flex-direction: column;
+            }
+            
+            .scanner-overlay.active {
+                display: flex;
+            }
+            
+            .scanner-header {
+                height: 56px;
+                background: #1976d2;
+                color: white;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 0 16px;
+            }
+            
+            .close-scanner {
+                width: 40px;
+                height: 40px;
+                border-radius: 50%;
+                background: rgba(255,255,255,0.1);
+                border: none;
+                color: white;
+                font-size: 24px;
+                cursor: pointer;
+            }
+            
+            .scanner-video-container {
+                flex: 1;
+                background: #000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                position: relative;
+            }
+            
+            .scanner-video-container video {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+            }
+            
+            .scan-status {
+                position: absolute;
+                bottom: 20px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: rgba(0,0,0,0.8);
+                color: white;
+                padding: 12px 24px;
+                border-radius: 24px;
+            }
+            
+            /* Toast */
+            .toast {
+                position: fixed;
+                bottom: 80px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: #323232;
+                color: white;
+                padding: 12px 24px;
+                border-radius: 24px;
+                z-index: 3000;
+                opacity: 0;
+                transition: opacity 0.3s;
+            }
+            
+            .toast.show {
+                opacity: 1;
+            }
+            
+            /* Hide print form on screen */
+            .print-only {
+                display: none;
+            }
+        }
+        
+        /* ===== PRINT STYLES (PDF Form Layout) ===== */
+        @media print {
+            /* Hide all mobile UI */
+            .app-bar, .bottom-nav, .fab, .scanner-overlay, 
+            .status-card, .section-header, .expand-icon, 
+            .toast, .icon-btn, .input-icon, .content {
+                display: none !important;
+            }
+            
+            body {
+                background: white !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+            
+            /* Show print form */
+            .print-only {
+                display: block !important;
+                position: relative;
+                width: 850px;
+                height: 1100px;
+                margin: 0 auto;
+                page-break-after: always;
+            }
+            
+            #pdf-background {
+                width: 100%;
+                height: 100%;
+            }
+            
+            .print-field {
+                position: absolute;
+                font-family: Arial, sans-serif;
+                font-size: 11px;
+                line-height: 1.2;
+                color: #000;
+                overflow: visible;
+            }
+            
+            .print-field.multiline {
+                white-space: pre-wrap;
+                word-wrap: break-word;
+            }
+            
+            /* Field positions matching original form */
+            #print_customer_name { top: 102px; left: 105px; width: 240px; }
+            #print_phone_number { top: 102px; left: 530px; width: 160px; }
+            #print_work_order_number { top: 66px; left: 685px; width: 150px; }
+            #print_date { top: 102px; left: 705px; width: 130px; }
+            #print_vin_number { top: 133px; left: 50px; width: 340px; }
+            #print_year { top: 133px; left: 405px; width: 55px; }
+            #print_make { top: 133px; left: 475px; width: 150px; }
+            #print_model { top: 133px; left: 640px; width: 195px; }
+            #print_mileage { top: 164px; left: 90px; width: 100px; }
+            #print_county { top: 164px; left: 350px; width: 150px; }
+            #print_license_plate { top: 164px; left: 605px; width: 230px; }
+            #print_tire_tread_lf { top: 247px; left: 147px; width: 40px; }
+            #print_tire_tread_rf { top: 247px; left: 260px; width: 40px; }
+            #print_tire_tread_lr { top: 278px; left: 147px; width: 40px; }
+            #print_tire_tread_rr { top: 278px; left: 260px; width: 40px; }
+            #print_brakes_lf { top: 247px; left: 415px; width: 40px; }
+            #print_brakes_rf { top: 247px; left: 528px; width: 40px; }
+            #print_brakes_lr { top: 278px; left: 415px; width: 40px; }
+            #print_brakes_rr { top: 278px; left: 528px; width: 40px; }
+            #print_oil_type { top: 385px; left: 200px; width: 400px; }
+            #print_services_performed { top: 570px; left: 50px; width: 785px; height: 180px; }
+            #print_parts_used { top: 800px; left: 50px; width: 785px; height: 120px; }
+            #print_tech_notes { top: 960px; left: 50px; width: 785px; height: 80px; }
+            #print_tech_name { top: 1055px; left: 200px; width: 300px; }
+            
+            @page {
+                size: letter;
+                margin: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- ===== MOBILE UI (Screen Only) ===== -->
+    <div class="app-bar">
+        <h1>Work Order Guru</h1>
+        <button class="icon-btn" onclick="window.print()" title="Print">🖨️</button>
+    </div>
+    
+    <div class="content">
+        <div class="status-card">
+            <span id="firebase-status-text">Connecting...</span>
+            <span class="status-indicator" id="status-indicator"></span>
+        </div>
+        
+        <!-- Load Previous Entry -->
+        <div class="section-card expanded">
+            <div class="section-header" onclick="toggleSection(this)">
+                <div class="section-title">
+                    <span class="section-icon">📂</span>
+                    <span>Load Previous</span>
+                </div>
+                <span class="expand-icon">▼</span>
+            </div>
+            <div class="section-content">
+                <div class="section-body">
+                    <input type="text" class="form-input" id="entry-search" placeholder="Search..." style="margin-bottom: 8px;">
+                    <select class="form-input" id="entries-dropdown" size="5">
+                        <option value="">Loading...</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Customer Info -->
+        <div class="section-card">
+            <div class="section-header" onclick="toggleSection(this)">
+                <div class="section-title">
+                    <span class="section-icon">👤</span>
+                    <span>Customer Info</span>
+                </div>
+                <span class="expand-icon">▼</span>
+            </div>
+            <div class="section-content">
+                <div class="section-body">
+                    <div class="form-group">
+                        <label class="form-label">Customer Name</label>
+                        <input type="text" class="form-input" id="customer_name" placeholder="Name">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Phone</label>
+                        <input type="tel" class="form-input" id="phone_number" placeholder="Phone">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Work Order #</label>
+                            <input type="text" class="form-input" id="work_order_number" placeholder="Auto">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Date</label>
+                            <input type="date" class="form-input" id="date">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Vehicle Info -->
+        <div class="section-card">
+            <div class="section-header" onclick="toggleSection(this)">
+                <div class="section-title">
+                    <span class="section-icon">🚗</span>
+                    <span>Vehicle Info</span>
+                </div>
+                <span class="expand-icon">▼</span>
+            </div>
+            <div class="section-content">
+                <div class="section-body">
+                    <div class="form-group">
+                        <label class="form-label">VIN Number</label>
+                        <div class="form-input-group">
+                            <input type="text" class="form-input has-icon" id="vin_number" placeholder="Scan or enter VIN" maxlength="17">
+                            <button class="input-icon" onclick="openScanner()">📷</button>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Year</label>
+                            <input type="text" class="form-input" id="year" placeholder="Year" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Make</label>
+                            <input type="text" class="form-input" id="make" placeholder="Make" readonly>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Model</label>
+                        <input type="text" class="form-input" id="model" placeholder="Model" readonly>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Mileage</label>
+                            <input type="text" class="form-input" id="mileage" placeholder="Mileage">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">County</label>
+                            <input type="text" class="form-input" id="county" placeholder="County" readonly>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">License Plate</label>
+                        <input type="text" class="form-input" id="license_plate" placeholder="Plate">
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Inspection -->
+        <div class="section-card">
+            <div class="section-header" onclick="toggleSection(this)">
+                <div class="section-title">
+                    <span class="section-icon">🔍</span>
+                    <span>Inspection</span>
+                </div>
+                <span class="expand-icon">▼</span>
+            </div>
+            <div class="section-content">
+                <div class="section-body">
+                    <div class="form-group">
+                        <label class="form-label">Tire Tread (LF/RF/LR/RR)</label>
+                        <div class="form-row-4">
+                            <input type="text" class="form-input" id="tire_tread_lf" placeholder="LF">
+                            <input type="text" class="form-input" id="tire_tread_rf" placeholder="RF">
+                            <input type="text" class="form-input" id="tire_tread_lr" placeholder="LR">
+                            <input type="text" class="form-input" id="tire_tread_rr" placeholder="RR">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Brakes (LF/RF/LR/RR)</label>
+                        <div class="form-row-4">
+                            <input type="text" class="form-input" id="brakes_lf" placeholder="LF">
+                            <input type="text" class="form-input" id="brakes_rf" placeholder="RF">
+                            <input type="text" class="form-input" id="brakes_lr" placeholder="LR">
+                            <input type="text" class="form-input" id="brakes_rr" placeholder="RR">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Services -->
+        <div class="section-card">
+            <div class="section-header" onclick="toggleSection(this)">
+                <div class="section-title">
+                    <span class="section-icon">🔧</span>
+                    <span>Services</span>
+                </div>
+                <span class="expand-icon">▼</span>
+            </div>
+            <div class="section-content">
+                <div class="section-body">
+                    <div class="form-group">
+                        <label class="form-label">Oil Type</label>
+                        <input type="text" class="form-input" id="oil_type" placeholder="e.g., 5W-30">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Services Performed</label>
+                        <textarea class="form-input" id="services_performed" placeholder="List services..."></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Parts -->
+        <div class="section-card">
+            <div class="section-header" onclick="toggleSection(this)">
+                <div class="section-title">
+                    <span class="section-icon">⚙️</span>
+                    <span>Parts Used</span>
+                </div>
+                <span class="expand-icon">▼</span>
+            </div>
+            <div class="section-content">
+                <div class="section-body">
+                    <div class="form-group">
+                        <label class="form-label">Parts & Quantities</label>
+                        <textarea class="form-input" id="parts_used" placeholder="List parts..."></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Notes -->
+        <div class="section-card">
+            <div class="section-header" onclick="toggleSection(this)">
+                <div class="section-title">
+                    <span class="section-icon">📝</span>
+                    <span>Notes</span>
+                </div>
+                <span class="expand-icon">▼</span>
+            </div>
+            <div class="section-content">
+                <div class="section-body">
+                    <div class="form-group">
+                        <label class="form-label">Technician Notes</label>
+                        <textarea class="form-input" id="tech_notes" placeholder="Notes..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Technician Name</label>
+                        <input type="text" class="form-input" id="tech_name" placeholder="Your name">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- FAB -->
+    <button class="fab" onclick="saveWorkOrder()">💾</button>
+    
+    <!-- Bottom Nav -->
+    <div class="bottom-nav">
+        <button class="nav-item" onclick="clearForm()">
+            <span class="nav-icon">🆕</span>
+            <span>New</span>
+        </button>
+        <button class="nav-item" onclick="saveWorkOrder()">
+            <span class="nav-icon">💾</span>
+            <span>Save</span>
+        </button>
+        <button class="nav-item" onclick="window.print()">
+            <span class="nav-icon">🖨️</span>
+            <span>Print</span>
+        </button>
+    </div>
+    
+    <!-- Scanner -->
+    <div class="scanner-overlay" id="scanner-overlay">
+        <div class="scanner-header">
+            <span>Scan VIN Barcode</span>
+            <button class="close-scanner" onclick="closeScanner()">✕</button>
+        </div>
+        <div class="scanner-video-container" id="scanner-video"></div>
+        <div class="scan-status" id="scan-status">Initializing camera...</div>
+    </div>
+    
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+    
+    <!-- ===== PRINT FORM (Print Only) ===== -->
+    <div class="print-only">
+        <img id="pdf-background" src="data:image/svg+xml,%3Csvg width='850' height='1100' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='850' height='1100' fill='%23ffffff'/%3E%3Ctext x='425' y='40' text-anchor='middle' font-size='24' font-weight='bold'%3EWORK ORDER%3C/text%3E%3C/svg%3E" alt="Form">
+        
+        <!-- Print fields positioned exactly like original form -->
+        <div class="print-field" id="print_customer_name"></div>
+        <div class="print-field" id="print_phone_number"></div>
+        <div class="print-field" id="print_work_order_number"></div>
+        <div class="print-field" id="print_date"></div>
+        <div class="print-field" id="print_vin_number"></div>
+        <div class="print-field" id="print_year"></div>
+        <div class="print-field" id="print_make"></div>
+        <div class="print-field" id="print_model"></div>
+        <div class="print-field" id="print_mileage"></div>
+        <div class="print-field" id="print_county"></div>
+        <div class="print-field" id="print_license_plate"></div>
+        <div class="print-field" id="print_tire_tread_lf"></div>
+        <div class="print-field" id="print_tire_tread_rf"></div>
+        <div class="print-field" id="print_tire_tread_lr"></div>
+        <div class="print-field" id="print_tire_tread_rr"></div>
+        <div class="print-field" id="print_brakes_lf"></div>
+        <div class="print-field" id="print_brakes_rf"></div>
+        <div class="print-field" id="print_brakes_lr"></div>
+        <div class="print-field" id="print_brakes_rr"></div>
+        <div class="print-field" id="print_oil_type"></div>
+        <div class="print-field multiline" id="print_services_performed"></div>
+        <div class="print-field multiline" id="print_parts_used"></div>
+        <div class="print-field multiline" id="print_tech_notes"></div>
+        <div class="print-field" id="print_tech_name"></div>
+    </div>
+    
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    
+    <script>
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyDRo1lHX0fOUhq7XOC5sZ0k0zvQXSNu3pY",
+            authDomain: "car-repair-7cfcb.firebaseapp.com",
+            databaseURL: "https://car-repair-7cfcb-default-rtdb.firebaseio.com",
+            projectId: "car-repair-7cfcb",
+            storageBucket: "car-repair-7cfcb.appspot.com",
+            messagingSenderId: "444872957433",
+            appId: "1:444872957433:web:b75c1d3a5e9b0c8f8a9f6d"
+        };
+        
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        
+        // Status indicator
+        database.ref('.info/connected').on('value', (snapshot) => {
+            const indicator = document.getElementById('status-indicator');
+            const statusText = document.getElementById('firebase-status-text');
+            if (snapshot.val() === true) {
+                indicator.classList.add('connected');
+                statusText.textContent = 'Connected';
+            } else {
+                indicator.classList.remove('connected');
+                statusText.textContent = 'Connecting...';
+            }
+        });
+        
+        // UI Functions
+        function toggleSection(header) {
+            header.parentElement.classList.toggle('expanded');
+        }
+        
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+        
+        // Scanner Functions
+        let videoStream = null;
+        let scanningInterval = null;
+        let scannerActive = false;
+        
+        async function openScanner() {
+            const overlay = document.getElementById('scanner-overlay');
+            overlay.classList.add('active');
+            scannerActive = true;
+            
+            const container = document.getElementById('scanner-video');
+            container.innerHTML = '';
+            
+            const video = document.createElement('video');
+            video.setAttribute('playsinline', '');
+            video.setAttribute('autoplay', '');
+            container.appendChild(video);
+            
+            try {
+                const isAndroid = /Android/i.test(navigator.userAgent);
+                videoStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'environment',
+                        width: { ideal: isAndroid ? 1280 : 1920 },
+                        height: { ideal: isAndroid ? 720 : 1080 }
+                    }
+                });
+                
+                video.srcObject = videoStream;
+                await video.play();
+                
+                if ('BarcodeDetector' in window) {
+                    startBarcodeScanning(video);
+                } else {
+                    showToast('Barcode scanner not supported on this device');
+                    closeScanner();
+                }
+            } catch (err) {
+                showToast('Camera access denied');
+                closeScanner();
+            }
+        }
+        
+        function closeScanner() {
+            scannerActive = false;
+            document.getElementById('scanner-overlay').classList.remove('active');
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+                videoStream = null;
+            }
+            if (scanningInterval) {
+                clearInterval(scanningInterval);
+                scanningInterval = null;
+            }
+        }
+        
+        async function startBarcodeScanning(video) {
+            const barcodeDetector = new BarcodeDetector({ 
+                formats: ['code_39', 'code_128', 'ean_13', 'ean_8', 'itf'] 
+            });
+            const scanStatus = document.getElementById('scan-status');
+            scanStatus.textContent = 'Ready to scan...';
+            
+            scanningInterval = setInterval(async () => {
+                if (!scannerActive) return;
+                
+                try {
+                    const barcodes = await barcodeDetector.detect(video);
+                    if (barcodes.length > 0) {
+                        for (const barcode of barcodes) {
+                            let code = barcode.rawValue.toUpperCase().trim();
+                            code = code.replace(/[^A-HJ-NPR-Z0-9]/g, '');
+                            
+                            scanStatus.textContent = 'Reading: ' + code.substring(0, 15);
+                            
+                            // Handle 18-char codes (strip first digit)
+                            if (code.length === 18) {
+                                code = code.substring(1);
+                            }
+                            
+                            if (code.length === 17 && /^[A-HJ-NPR-Z0-9]{17}$/.test(code)) {
+                                scanStatus.textContent = '✓ VIN Found!';
+                                document.getElementById('vin_number').value = code;
+                                closeScanner();
+                                showToast('VIN scanned successfully!');
+                                decodeVIN(code);
+                                return;
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error('Scan error:', err);
+                }
+            }, 100);
+        }
+        
+        // VIN Decoder
+        async function decodeVIN(vin) {
+            if (!vin || vin.length !== 17) return;
+            
+            showToast('Decoding VIN...');
+            
+            try {
+                const response = await fetch(`https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVin/${vin}?format=json`);
+                const data = await response.json();
+                const results = data.Results;
+                
+                document.getElementById('year').value = results.find(r => r.Variable === 'Model Year')?.Value || '';
+                document.getElementById('make').value = results.find(r => r.Variable === 'Make')?.Value || '';
+                document.getElementById('model').value = results.find(r => r.Variable === 'Model')?.Value || '';
+                
+                showToast('Vehicle info loaded!');
+                
+                // Lookup county
+                lookupCounty(vin);
+            } catch (err) {
+                console.error('VIN decode error:', err);
+                showToast('Could not decode VIN');
+            }
+        }
+        
+        // County Lookup
+        async function lookupCounty(vin) {
+            if (!vin || vin.length < 10) return;
+            
+            try {
+                const response = await fetch(`https://corsproxy.io/?https://geo.fcc.gov/api/census/area?lat=37.7749&lon=-122.4194&format=json`);
+                const data = await response.json();
+                
+                if (data.results && data.results.length > 0) {
+                    document.getElementById('county').value = data.results[0].county_name;
+                }
+            } catch (err) {
+                console.error('County lookup error:', err);
+            }
+        }
+        
+        // VIN field auto-decode
+        document.getElementById('vin_number').addEventListener('blur', function() {
+            const vin = this.value.trim();
+            if (vin.length === 17) {
+                decodeVIN(vin);
+            }
+        });
+        
+        // Auto-format tire tread fields
+        ['tire_tread_lf', 'tire_tread_rf', 'tire_tread_lr', 'tire_tread_rr'].forEach(id => {
+            document.getElementById(id).addEventListener('blur', function() {
+                let val = this.value.trim();
+                if (val && !val.includes('/') && /^\d+(\.\d+)?$/.test(val)) {
+                    this.value = val + '/32';
+                }
+            });
+        });
+        
+        // Auto-format brake fields
+        ['brakes_lf', 'brakes_rf', 'brakes_lr', 'brakes_rr'].forEach(id => {
+            document.getElementById(id).addEventListener('blur', function() {
+                let val = this.value.trim();
+                if (val && !/[A-Za-z]/.test(val) && /^\d+$/.test(val)) {
+                    this.value = val + 'B';
+                }
+            });
+        });
+        
+        // Sync data to print fields before printing
+        window.addEventListener('beforeprint', function() {
+            const fields = [
+                'customer_name', 'phone_number', 'work_order_number', 'date',
+                'vin_number', 'year', 'make', 'model', 'mileage', 'county', 'license_plate',
+                'tire_tread_lf', 'tire_tread_rf', 'tire_tread_lr', 'tire_tread_rr',
+                'brakes_lf', 'brakes_rf', 'brakes_lr', 'brakes_rr',
+                'oil_type', 'services_performed', 'parts_used', 'tech_notes', 'tech_name'
+            ];
+            
+            fields.forEach(field => {
+                const input = document.getElementById(field);
+                const printField = document.getElementById('print_' + field);
+                if (input && printField) {
+                    printField.textContent = input.value;
+                }
+            });
+        });
+        
+        // Save Work Order
+        function saveWorkOrder() {
+            const workOrder = {
+                customer_name: document.getElementById('customer_name').value,
+                phone_number: document.getElementById('phone_number').value,
+                work_order_number: document.getElementById('work_order_number').value || Date.now().toString(),
+                date: document.getElementById('date').value,
+                vin_number: document.getElementById('vin_number').value,
+                year: document.getElementById('year').value,
+                make: document.getElementById('make').value,
+                model: document.getElementById('model').value,
+                mileage: document.getElementById('mileage').value,
+                county: document.getElementById('county').value,
+                license_plate: document.getElementById('license_plate').value,
+                tire_tread_lf: document.getElementById('tire_tread_lf').value,
+                tire_tread_rf: document.getElementById('tire_tread_rf').value,
+                tire_tread_lr: document.getElementById('tire_tread_lr').value,
+                tire_tread_rr: document.getElementById('tire_tread_rr').value,
+                brakes_lf: document.getElementById('brakes_lf').value,
+                brakes_rf: document.getElementById('brakes_rf').value,
+                brakes_lr: document.getElementById('brakes_lr').value,
+                brakes_rr: document.getElementById('brakes_rr').value,
+                oil_type: document.getElementById('oil_type').value,
+                services_performed: document.getElementById('services_performed').value,
+                parts_used: document.getElementById('parts_used').value,
+                tech_notes: document.getElementById('tech_notes').value,
+                tech_name: document.getElementById('tech_name').value,
+                timestamp: Date.now()
+            };
+            
+            const woNumber = workOrder.work_order_number;
+            
+            database.ref('repairOrders/' + woNumber).set(workOrder)
+                .then(() => {
+                    showToast('✓ Work order saved!');
+                    loadPreviousEntries();
+                })
+                .catch((error) => {
+                    showToast('Error: ' + error.message);
+                });
+        }
+        
+        // Clear Form
+        function clearForm() {
+            if (confirm('Clear all fields?')) {
+                document.querySelectorAll('.form-input').forEach(input => input.value = '');
+                document.getElementById('date').valueAsDate = new Date();
+                showToast('Form cleared');
+            }
+        }
+        
+        // Load Previous Entries
+        function loadPreviousEntries() {
+            database.ref('repairOrders').orderByChild('timestamp').limitToLast(50).once('value', (snapshot) => {
+                const dropdown = document.getElementById('entries-dropdown');
+                dropdown.innerHTML = '<option value="">-- Select Entry --</option>';
+                
+                const entries = [];
+                snapshot.forEach((child) => entries.push({ key: child.key, data: child.val() }));
+                
+                entries.reverse().forEach((entry) => {
+                    const data = entry.data;
+                    const option = document.createElement('option');
+                    option.value = entry.key;
+                    option.textContent = `${data.date || '?'} - ${data.customer_name || '?'} - ${data.year || ''} ${data.make || ''} ${data.model || ''}`;
+                    dropdown.appendChild(option);
+                });
+            });
+        }
+        
+        // Load selected entry
+        document.getElementById('entries-dropdown').addEventListener('change', function() {
+            if (!this.value) return;
+            
+            database.ref('repairOrders/' + this.value).once('value', (snapshot) => {
+                const data = snapshot.val();
+                if (!data) return;
+                
+                Object.keys(data).forEach(key => {
+                    const el = document.getElementById(key);
+                    if (el) el.value = data[key] || '';
+                });
+                
+                showToast('Entry loaded');
+                
+                // Expand all sections
+                document.querySelectorAll('.section-card').forEach(card => {
+                    card.classList.add('expanded');
+                });
+            });
+        });
+        
+        // Search entries
+        document.getElementById('entry-search').addEventListener('input', function() {
+            const search = this.value.toLowerCase();
+            document.querySelectorAll('#entries-dropdown option').forEach(opt => {
+                if (opt.value === '') return;
+                opt.style.display = opt.textContent.toLowerCase().includes(search) ? '' : 'none';
+            });
+        });
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('date').valueAsDate = new Date();
+            loadPreviousEntries();
+            showToast('Welcome! 📱');
+        });
+    </script>
+</body>
+</html>
