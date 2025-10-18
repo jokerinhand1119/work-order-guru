@@ -648,6 +648,16 @@
                         <label class="form-label">License Plate</label>
                         <input type="text" class="form-input" id="license_plate" placeholder="Plate">
                     </div>
+                    <div class="form-row-2">
+                        <div class="form-group">
+                            <label class="form-label">Stock #</label>
+                            <input type="text" class="form-input" id="stock" placeholder="Stock">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Engine Size</label>
+                            <input type="text" class="form-input" id="engine_size" placeholder="e.g., 3.5L">
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -680,6 +690,50 @@
                             <input type="text" class="form-input" id="brakes_lr" placeholder="LR">
                             <input type="text" class="form-input" id="brakes_rr" placeholder="RR">
                         </div>
+                    </div>
+                    <div class="form-row-2">
+                        <div class="form-group">
+                            <label class="form-label">Tire PSI Front</label>
+                            <input type="text" class="form-input" id="tire_psi_front" placeholder="PSI">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Tire PSI Rear</label>
+                            <input type="text" class="form-input" id="tire_psi_rear" placeholder="PSI">
+                        </div>
+                    </div>
+                    <div class="form-row-2">
+                        <div class="form-group">
+                            <label class="form-label">Inspection #</label>
+                            <input type="text" class="form-input" id="inspection_number" placeholder="Number">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Inspection Exp</label>
+                            <input type="text" class="form-input" id="inspection_exp" placeholder="MM/YY">
+                        </div>
+                    </div>
+                    <div class="form-row-2">
+                        <div class="form-group">
+                            <label class="form-label">Inspection Date</label>
+                            <input type="text" class="form-input" id="inspection_date" placeholder="Date">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Emissions #</label>
+                            <input type="text" class="form-input" id="emissions_number" placeholder="Number">
+                        </div>
+                    </div>
+                    <div class="form-row-2">
+                        <div class="form-group">
+                            <label class="form-label">Emissions Date</label>
+                            <input type="text" class="form-input" id="emissions_date" placeholder="Date">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Old Insp. Exp</label>
+                            <input type="text" class="form-input" id="old_inspection_exp" placeholder="MM/YY">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Old Inspection Miles</label>
+                        <input type="text" class="form-input" id="old_inspection_miles" placeholder="Miles">
                     </div>
                 </div>
             </div>
@@ -1097,17 +1151,18 @@
         
         // Sync data to print fields before printing
         window.addEventListener('beforeprint', function() {
-            // Basic fields
+            // All basic text fields that map directly
             const basicFields = [
                 'customer_name', 'phone_number', 'work_order_number', 'date',
                 'vin_number', 'mileage', 'county', 'license_plate',
                 'tire_tread_lf', 'tire_tread_rf', 'tire_tread_lr', 'tire_tread_rr',
                 'brakes_lf', 'brakes_rf', 'brakes_lr', 'brakes_rr',
-                'oil_type', 'services_performed', 'tech_notes', 'tech_name',
-                'stock', 'engine_size', 'address',
+                'services_performed', 'tech_name',
+                'stock', 'engine_size',
                 'inspection_number', 'inspection_exp', 'inspection_date',
                 'emissions_number', 'emissions_date',
-                'old_inspection_exp', 'old_inspection_miles', 'tire_psi_front', 'tire_psi_rear'
+                'old_inspection_exp', 'old_inspection_miles', 
+                'tire_psi_front', 'tire_psi_rear'
             ];
             
             basicFields.forEach(field => {
