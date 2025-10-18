@@ -1479,18 +1479,29 @@
                                     let countyName = fccData.results[0].county_name;
                                     countyName = countyName.replace(/ County$/i, '');
                                     countyInput.value = countyName.toUpperCase();
+                                    showToast('County autofilled: ' + countyInput.value);
                                     console.log('County autofilled:', countyInput.value);
                                     return;
+                                } else {
+                                    showToast('County not found for this location.');
                                 }
+                            } else {
+                                showToast('FCC county lookup failed.');
                             }
+                        } else {
+                            showToast('ZIP found, but no place data.');
                         }
                         countyInput.value = '';
                     } catch (err) {
                         console.error('County lookup error:', err);
+                        showToast('County lookup error: ' + err.message);
                         countyInput.value = '';
                     }
                 } else {
                     countyInput.value = '';
+                    if (address.length > 0) {
+                        showToast('No valid ZIP code found in address.');
+                    }
                 }
             }
 
