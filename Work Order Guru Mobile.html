@@ -1354,12 +1354,13 @@
             });
         });
         
-        // Search entries
+        // Search entries (ignores special characters)
         document.getElementById('entry-search').addEventListener('input', function() {
-            const search = this.value.toLowerCase();
+            const search = this.value.toLowerCase().replace(/[^a-z0-9\s]/g, '');
             document.querySelectorAll('#entries-dropdown option').forEach(opt => {
                 if (opt.value === '') return;
-                opt.style.display = opt.textContent.toLowerCase().includes(search) ? '' : 'none';
+                const optText = opt.textContent.toLowerCase().replace(/[^a-z0-9\s]/g, '');
+                opt.style.display = optText.includes(search) ? '' : 'none';
             });
         });
         
