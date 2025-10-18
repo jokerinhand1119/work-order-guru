@@ -1251,14 +1251,26 @@
         
         // Load Previous Entries
         function loadPreviousEntries() {
-            database.ref('repairOrders').orderByChild('timestamp').limitToLast(50).once('value', (snapshot) => {
+            console.log('Loading entries from Firebase...');
+            database.ref('repairOrders').on('value', (snapshot) => {
                 const dropdown = document.getElementById('entries-dropdown');
                 dropdown.innerHTML = '<option value="">-- Select Entry --</option>';
                 
                 const entries = [];
-                snapshot.forEach((child) => entries.push({ key: child.key, data: child.val() }));
+                snapshot.forEach((child) => {
+                    entries.push({ key: child.key, data: child.val() });
+                });
                 
-                entries.reverse().forEach((entry) => {
+                console.log(`Found ${entries.length} total entries in database`);
+                
+                // Sort by timestamp or date
+                entries.sort((a, b) => {
+                    const aTime = a.data.timestamp || new Date(a.data.input_date || a.data.date || 0).getTime();
+                    const bTime = b.data.timestamp || new Date(b.data.input_date || b.data.date || 0).getTime();
+                    return bTime - aTime; // Newest first
+                });
+                
+                entries.forEach((entry, index) => {
                     const data = entry.data;
                     const option = document.createElement('option');
                     option.value = entry.key;
@@ -1272,7 +1284,14 @@
                     
                     option.textContent = `${date} - ${customerName} - ${year} ${make} ${model}`.trim();
                     dropdown.appendChild(option);
+                    
+                    console.log(`Entry ${index + 1}: ${option.textContent}`);
                 });
+                
+                showToast(`Loaded ${entries.length} entries`);
+            }).catch((error) => {
+                console.error('Error loading entries:', error);
+                showToast('Error: ' + error.message);
             });
         }
         
