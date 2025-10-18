@@ -937,34 +937,115 @@
                 scanStatus.textContent = 'Initializing scanner...';
             }
             
+            // Stop the manual video stream since Quagga will create its own
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+                videoStream = null;
+            }
+            
+            // Clear the video element
+            const videoContainer = document.getElementById('scanner-video');
+            videoContainer.innerHTML = '';
+            
+            let detectionCount = {};
+            
             // Quagga implementation as fallback
             Quagga.init({
                 inputStream: {
                     type: "LiveStream",
                     target: document.querySelector('#scanner-video'),
                     constraints: {
+                        width: { min: 640, ideal: 1280 },
+                        height: { min: 480, ideal: 720 },
                         facingMode: "environment"
                     }
                 },
                 decoder: {
-                    readers: ["code_39_reader", "code_128_reader"]
-                }
+                    readers: ["code_39_reader", "code_128_reader", "ean_reader"],
+                    debug: {
+                        drawBoundingBox: false,
+                        showFrequency: false,
+                        drawScanline: false,
+                        showPattern: false
+                    }
+                },
+                locator: {
+                    patchSize: "medium",
+                    halfSample: true
+                },
+                numOfWorkers: 2,
+                frequency: 10
             }, function(err) {
                 if (err) {
                     console.error('Quagga error:', err);
-                    stopScanner();
+                    if (scanStatus) {
+                        scanStatus.textContent = 'Scanner error: ' + err.message;
+                        scanStatus.style.background = 'rgba(220, 53, 69, 0.3)';
+                        scanStatus.style.color = '#dc3545';
+                    }
+                    setTimeout(function() {
+                        stopScanner();
+                    }, 3000);
                     return;
                 }
-                Quagga.start();
                 
-                Quagga.onDetected(function(result) {
-                    const code = result.codeResult.code.toUpperCase().trim();
-                    console.log('Quagga detected:', code);
+                console.log('Quagga started successfully');
+                if (scanStatus) {
+                    scanStatus.textContent = 'Ready to scan - point at VIN barcode';
+                    scanStatus.style.background = 'rgba(0, 255, 136, 0.3)';
+                    scanStatus.style.color = '#00ff88';
+                }
+                
+                Quagga.start();
+            });
+            
+            Quagga.onDetected(function(result) {
+                if (!scannerActive) return;
+                
+                const code = result.codeResult.code.toUpperCase().trim();
+                console.log('Quagga detected:', code, 'format:', result.codeResult.format);
+                
+                if (scanStatus) {
+                    scanStatus.style.display = 'block';
+                    scanStatus.textContent = 'Reading: ' + code.substring(0, 12) + '...';
+                    scanStatus.style.background = 'rgba(255, 193, 7, 0.3)';
+                    scanStatus.style.color = '#ffc107';
+                }
+                
+                // Check if it looks like a VIN
+                if (code.length >= 14 && /^[A-HJ-NPR-Z0-9]+$/.test(code)) {
+                    const vin = code.length > 17 ? code.substring(0, 17) : code;
                     
-                    if (code.length >= 15 && code.length <= 17 && /^[A-HJ-NPR-Z0-9]+$/.test(code)) {
-                        processScannedVIN(code);
+                    // If exactly 17 characters, accept immediately
+                    if (vin.length === 17) {
+                        console.log('VIN confirmed (17 chars):', vin);
+                        
+                        if (scanStatus) {
+                            scanStatus.textContent = '✓ VIN Found!';
+                            scanStatus.style.background = 'rgba(0, 255, 136, 0.3)';
+                            scanStatus.style.color = '#00ff88';
+                        }
+                        
+                        processScannedVIN(vin);
+                        return;
                     }
-                });
+                    
+                    // For shorter codes, require 2 detections
+                    detectionCount[code] = (detectionCount[code] || 0) + 1;
+                    
+                    if (detectionCount[code] >= 2) {
+                        console.log('VIN confirmed (repeated):', vin);
+                        
+                        if (scanStatus) {
+                            scanStatus.textContent = '✓ VIN Found!';
+                            scanStatus.style.background = 'rgba(0, 255, 136, 0.3)';
+                            scanStatus.style.color = '#00ff88';
+                        }
+                        
+                        processScannedVIN(vin);
+                        return;
+                    }
+                }
             });
         }
         
