@@ -1087,20 +1087,35 @@
         // VIN Decoder
         async function decodeVIN(vin) {
             if (!vin || vin.length !== 17) return;
-            
+
             showToast('Decoding VIN...');
-            
+
             try {
                 const response = await fetch(`https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVin/${vin}?format=json`);
                 const data = await response.json();
                 const results = data.Results;
-                
-                document.getElementById('year').value = results.find(r => r.Variable === 'Model Year')?.Value || '';
-                document.getElementById('make').value = results.find(r => r.Variable === 'Make')?.Value || '';
-                document.getElementById('model').value = results.find(r => r.Variable === 'Model')?.Value || '';
-                
+
+                // Extract fields
+                const year = results.find(r => r.Variable === 'Model Year')?.Value || '';
+                const make = results.find(r => r.Variable === 'Make')?.Value || '';
+                const model = results.find(r => r.Variable === 'Model')?.Value || '';
+                const trim = results.find(r => r.Variable === 'Trim')?.Value || '';
+                // Try to get engine size in liters, fallback to engine model if not found
+                let engineSize = results.find(r => r.Variable === 'Displacement (L)')?.Value || '';
+                if (!engineSize || engineSize === 'Not Applicable') {
+                    engineSize = results.find(r => r.Variable === 'Engine Model')?.Value || '';
+                }
+                if (engineSize && !engineSize.includes('L') && !isNaN(engineSize)) {
+                    engineSize = engineSize + 'L';
+                }
+
+                document.getElementById('year').value = year;
+                document.getElementById('make').value = make;
+                document.getElementById('model').value = model + (trim ? (' ' + trim) : '');
+                document.getElementById('engine_size').value = engineSize;
+
                 showToast('Vehicle info loaded!');
-                
+
                 // Lookup county
                 lookupCounty(vin);
             } catch (err) {
