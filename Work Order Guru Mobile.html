@@ -1186,21 +1186,16 @@
                 ymm.textContent = `${year} ${make} ${model}`.trim();
             }
             
-            // Parts list - sync quantity and part number fields (q1-q17, pn1-pn17)
-            for (let i = 1; i <= 17; i++) {
-                const qInput = document.getElementById('parts_used');
-                const printQ = document.getElementById('print_q' + i);
-                const printPN = document.getElementById('print_pn' + i);
-                
-                if (qInput && qInput.value) {
-                    // Parse parts from textarea (format: "Qty Part Number - Description")
-                    const lines = qInput.value.split('\n');
-                    if (lines[i-1]) {
-                        const match = lines[i-1].match(/^(\d+)\s+(.+?)(?:\s+-\s+.+)?$/);
-                        if (match && printQ && printPN) {
-                            printQ.textContent = match[1]; // quantity
-                            printPN.textContent = match[2]; // part number
-                        }
+            // Parts list - get from loaded data stored in window object
+            if (window.currentPartsData) {
+                for (let i = 1; i <= 17; i++) {
+                    const printQ = document.getElementById('print_q' + i);
+                    const printPN = document.getElementById('print_pn' + i);
+                    if (printQ && window.currentPartsData['q' + i]) {
+                        printQ.textContent = window.currentPartsData['q' + i];
+                    }
+                    if (printPN && window.currentPartsData['pn' + i]) {
+                        printPN.textContent = window.currentPartsData['pn' + i];
                     }
                 }
             }
@@ -1400,6 +1395,13 @@
                 setValue('emissions_date', data.input_new_state_em_date);
                 setValue('old_inspection_exp', data.input_old_s_i_exp_date);
                 setValue('old_inspection_miles', data.input_old_s_i_miles);
+                
+                // Store parts data for printing (q1-q17, pn1-pn17)
+                window.currentPartsData = {};
+                for (let i = 1; i <= 17; i++) {
+                    window.currentPartsData['q' + i] = data['input_q' + i] || '';
+                    window.currentPartsData['pn' + i] = data['input_pn' + i] || '';
+                }
                 
                 // Split year/make/model from original format
                 if (data.input_year_make_model_trim) {
