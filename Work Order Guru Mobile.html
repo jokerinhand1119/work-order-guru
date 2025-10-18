@@ -1455,23 +1455,51 @@
             showToast('Welcome! 📱');
 
             // County autofill from ZIP in address (on input and blur)
+            let lastZip = '';
+            let lastCountyFromZip = '';
+            let countyManuallyEdited = false;
+
+            const countyInput = document.getElementById('county');
+            const addressInput = document.getElementById('address');
+
+            // Detect manual edits to county
+            countyInput.addEventListener('input', function() {
+                // If user types something different than last autofilled value, treat as manual
+                if (countyInput.value !== lastCountyFromZip) {
+                    countyManuallyEdited = true;
+                }
+            });
+
             async function autofillCountyFromAddress() {
-                const address = document.getElementById('address').value;
+                const address = addressInput.value;
                 const zipMatch = address.match(/\b\d{5}\b/);
                 if (zipMatch) {
                     const zip = zipMatch[0];
-                    try {
-                        const resp = await fetch(`https://geo.fcc.gov/api/census/block/find?format=json&zip=${zip}`);
-                        const data = await resp.json();
-                        if (data && data.County && data.County.name) {
-                            document.getElementById('county').value = data.County.name;
+                    if (zip !== lastZip) {
+                        lastZip = zip;
+                        if (!countyManuallyEdited) {
+                            countyInput.value = '...'; // loading indicator
                         }
-                    } catch (err) {
-                        console.error('County lookup error:', err);
+                        try {
+                            const resp = await fetch(`https://geo.fcc.gov/api/census/block/find?format=json&zip=${zip}`);
+                            const data = await resp.json();
+                            if (data && data.County && data.County.name) {
+                                lastCountyFromZip = data.County.name;
+                                if (!countyManuallyEdited) {
+                                    countyInput.value = lastCountyFromZip;
+                                }
+                            } else if (!countyManuallyEdited) {
+                                countyInput.value = '';
+                            }
+                        } catch (err) {
+                            console.error('County lookup error:', err);
+                            if (!countyManuallyEdited) {
+                                countyInput.value = '';
+                            }
+                        }
                     }
                 }
             }
-            const addressInput = document.getElementById('address');
             addressInput.addEventListener('input', autofillCountyFromAddress);
             addressInput.addEventListener('blur', autofillCountyFromAddress);
         });
