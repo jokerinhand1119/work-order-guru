@@ -1454,15 +1454,13 @@
             loadPreviousEntries();
             showToast('Welcome! 📱');
 
-            // County autofill from ZIP in address
-            document.getElementById('address').addEventListener('blur', async function() {
-                const address = this.value;
-                // Find 5-digit ZIP code in address
+            // County autofill from ZIP in address (on input and blur)
+            async function autofillCountyFromAddress() {
+                const address = document.getElementById('address').value;
                 const zipMatch = address.match(/\b\d{5}\b/);
                 if (zipMatch) {
                     const zip = zipMatch[0];
                     try {
-                        // Use FCC API to get county from ZIP
                         const resp = await fetch(`https://geo.fcc.gov/api/census/block/find?format=json&zip=${zip}`);
                         const data = await resp.json();
                         if (data && data.County && data.County.name) {
@@ -1472,7 +1470,10 @@
                         console.error('County lookup error:', err);
                     }
                 }
-            });
+            }
+            const addressInput = document.getElementById('address');
+            addressInput.addEventListener('input', autofillCountyFromAddress);
+            addressInput.addEventListener('blur', autofillCountyFromAddress);
         });
     </script>
 </body>
