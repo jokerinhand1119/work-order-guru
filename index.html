@@ -734,9 +734,13 @@
             <div id="scan-status" style="position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0, 255, 136, 0.2); color: #00ff88; padding: 8px 16px; border-radius: 20px; font-weight: bold; display: none;">Reading...</div>
         </div>
         <div class="scanner-instructions">
-            <p style="font-size: 18px; font-weight: bold; margin: 5px 0;">Point at VIN barcode</p>
-            <p style="font-size: 14px; margin: 5px 0; opacity: 0.8;">Align barcode within green box • Hold steady • Good lighting helps</p>
-            <button id="manual-vin-btn" style="margin-top: 10px; padding: 10px 20px; background: #555; color: white; border: none; border-radius: 6px; font-size: 14px; cursor: pointer;">Can't scan? Type VIN manually</button>
+            <p style="font-size: 18px; font-weight: bold; margin: 5px 0;">Point at VIN barcode or stamped text</p>
+            <p style="font-size: 14px; margin: 5px 0; opacity: 0.8;">Align within green box • Hold steady • Good lighting helps</p>
+            <div style="margin-top: 10px;">
+                <button id="text-scan-mode-btn" style="display: none; padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 6px; font-size: 14px; cursor: pointer; margin-right: 10px;">📝 Text Mode</button>
+                <button id="barcode-scan-mode-btn" style="display: none; padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 6px; font-size: 14px; cursor: pointer; margin-right: 10px;">📷 Barcode Mode</button>
+                <button id="manual-vin-btn" style="padding: 10px 20px; background: #555; color: white; border: none; border-radius: 6px; font-size: 14px; cursor: pointer;">⌨️ Type Manually</button>
+            </div>
         </div>
     </div>
     
@@ -800,16 +804,54 @@
                         }
                     });
                 }
+                
+                // Text mode toggle button
+                const textModeBtn = document.getElementById('text-scan-mode-btn');
+                if (textModeBtn) {
+                    textModeBtn.addEventListener('click', function() {
+                        switchScanMode('text');
+                    });
+                }
+                
+                // Barcode mode toggle button
+                const barcodeModeBtn = document.getElementById('barcode-scan-mode-btn');
+                if (barcodeModeBtn) {
+                    barcodeModeBtn.addEventListener('click', function() {
+                        switchScanMode('barcode');
+                    });
+                }
             }, 1000);
         });
         
         let videoStream = null;
         let scanningInterval = null;
+        let scanMode = 'barcode'; // 'barcode' or 'text'
+        let textDetectorSupported = false;
         
         async function startScanner() {
             const overlay = document.getElementById('scanner-overlay');
             overlay.classList.add('active');
             scannerActive = true;
+            scanMode = 'barcode'; // Start with barcode mode
+            
+            // Check if text detection is supported
+            textDetectorSupported = 'TextDetector' in window;
+            
+            // Show appropriate mode buttons
+            const textModeBtn = document.getElementById('text-scan-mode-btn');
+            const barcodeModeBtn = document.getElementById('barcode-scan-mode-btn');
+            
+            if (textDetectorSupported) {
+                // Device supports text detection - show toggle buttons
+                if (textModeBtn) textModeBtn.style.display = 'inline-block';
+                if (barcodeModeBtn) barcodeModeBtn.style.display = 'none'; // Hide barcode button initially
+                console.log('Text detection supported - showing mode toggle');
+            } else {
+                // Hide both buttons - barcode only mode
+                if (textModeBtn) textModeBtn.style.display = 'none';
+                if (barcodeModeBtn) barcodeModeBtn.style.display = 'none';
+                console.log('Text detection not supported - barcode only');
+            }
             
             const videoContainer = document.getElementById('scanner-video');
             videoContainer.innerHTML = ''; // Clear previous content
@@ -942,6 +984,92 @@
                     }
                 }
             }, 100); // Scan every 100ms (10 times per second)
+        }
+        
+        async function startTextDetection(video) {
+            if (!textDetectorSupported) {
+                console.log('Text detection not supported');
+                return;
+            }
+            
+            const textDetector = new TextDetector();
+            const scanStatus = document.getElementById('scan-status');
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            if (scanStatus) {
+                scanStatus.style.display = 'block';
+                scanStatus.textContent = 'Text mode - Point at stamped VIN...';
+                scanStatus.style.background = 'rgba(33, 150, 243, 0.3)';
+                scanStatus.style.color = '#2196f3';
+            }
+            
+            scanningInterval = setInterval(async () => {
+                if (!scannerActive) return;
+                
+                try {
+                    // Set canvas size to match video
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    
+                    // Draw current video frame to canvas
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    
+                    // Detect text in the frame
+                    const texts = await textDetector.detect(canvas);
+                    
+                    if (texts.length > 0) {
+                        // Look for VIN pattern in detected text
+                        for (const textBlock of texts) {
+                            const text = textBlock.rawValue.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                            console.log('Detected text:', text);
+                            
+                            if (scanStatus) {
+                                scanStatus.style.display = 'block';
+                                scanStatus.textContent = 'Reading text: ' + text.substring(0, 12) + '...';
+                                scanStatus.style.background = 'rgba(33, 150, 243, 0.3)';
+                                scanStatus.style.color = '#2196f3';
+                            }
+                            
+                            // Look for 17-character VIN pattern
+                            const vinMatch = text.match(/[A-HJ-NPR-Z0-9]{17}/);
+                            if (vinMatch) {
+                                const vin = vinMatch[0];
+                                console.log('VIN found in text:', vin);
+                                
+                                if (scanStatus) {
+                                    scanStatus.textContent = '✓ VIN Found!';
+                                    scanStatus.style.background = 'rgba(0, 255, 136, 0.3)';
+                                    scanStatus.style.color = '#00ff88';
+                                }
+                                
+                                processScannedVIN(vin);
+                                return;
+                            }
+                            
+                            // Also check if entire text is close to VIN length
+                            if (text.length >= 15 && text.length <= 19 && /^[A-HJ-NPR-Z0-9]+$/.test(text)) {
+                                const vin = text.substring(0, 17);
+                                console.log('Possible VIN from text:', vin);
+                                
+                                if (scanStatus) {
+                                    scanStatus.textContent = '✓ VIN Found!';
+                                    scanStatus.style.background = 'rgba(0, 255, 136, 0.3)';
+                                    scanStatus.style.color = '#00ff88';
+                                }
+                                
+                                processScannedVIN(vin);
+                                return;
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error('Text detection error:', err);
+                    if (scanStatus) {
+                        scanStatus.textContent = 'Scanning text... Point at VIN';
+                    }
+                }
+            }, 200); // Scan every 200ms (text detection is more intensive)
         }
         
         function startQuaggaScanning(video) {
@@ -1181,6 +1309,54 @@
             const videoContainer = document.getElementById('scanner-video');
             if (videoContainer) {
                 videoContainer.innerHTML = '';
+            }
+        }
+        
+        async function switchScanMode(mode) {
+            if (scanMode === mode) return; // Already in this mode
+            
+            scanMode = mode;
+            console.log('Switching to ' + mode + ' mode');
+            
+            // Update button visibility
+            const textModeBtn = document.getElementById('text-scan-mode-btn');
+            const barcodeModeBtn = document.getElementById('barcode-scan-mode-btn');
+            
+            if (mode === 'text') {
+                if (textModeBtn) textModeBtn.style.display = 'none';
+                if (barcodeModeBtn) barcodeModeBtn.style.display = 'inline-block';
+            } else {
+                if (textModeBtn) textModeBtn.style.display = 'inline-block';
+                if (barcodeModeBtn) barcodeModeBtn.style.display = 'none';
+            }
+            
+            // Stop current scanning
+            if (scanningInterval) {
+                clearInterval(scanningInterval);
+                scanningInterval = null;
+            }
+            
+            if (typeof Quagga !== 'undefined') {
+                try {
+                    Quagga.stop();
+                } catch(e) {
+                    console.log('Quagga already stopped');
+                }
+            }
+            
+            // Restart with new mode
+            const videoElement = document.querySelector('#scanner-video video');
+            if (videoElement && videoStream) {
+                if (mode === 'text' && textDetectorSupported) {
+                    startTextDetection(videoElement);
+                } else {
+                    // Restart barcode scanning
+                    if ('BarcodeDetector' in window) {
+                        startNativeBarcodeScanning(videoElement);
+                    } else {
+                        startQuaggaScanning(videoElement);
+                    }
+                }
             }
         }
         
