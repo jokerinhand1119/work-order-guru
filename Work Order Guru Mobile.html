@@ -1466,6 +1466,37 @@
                 if (!addressInput || !countyInput) return;
                 const address = addressInput.value;
                 const zipMatch = address.match(/\b(\d{5})(?:-\d{4})?\b/);
+                async function fetchCountyWithRetry(lat, lon, retries = 2) {
+                    for (let attempt = 0; attempt <= retries; attempt++) {
+                        try {
+                            const fccResp = await fetch(`https://geo.fcc.gov/api/census/area?lat=${lat}&lon=${lon}&format=json`);
+                            if (fccResp.ok) {
+                                const fccData = await fccResp.json();
+                                if (fccData.results && fccData.results.length > 0) {
+                                    let countyName = fccData.results[0].county_name;
+                                    countyName = countyName.replace(/ County$/i, '');
+                                    countyInput.value = countyName.toUpperCase();
+                                    showToast('County autofilled: ' + countyInput.value);
+                                    console.log('County autofilled:', countyInput.value);
+                                    return true;
+                                } else {
+                                    showToast('County not found for this location.');
+                                    return false;
+                                }
+                            } else {
+                                showToast('FCC county lookup failed. Retrying...');
+                            }
+                        } catch (err) {
+                            console.error('FCC county fetch error:', err);
+                            showToast('FCC county fetch error. Retrying...');
+                        }
+                        // Wait 500ms before retrying
+                        await new Promise(res => setTimeout(res, 500));
+                    }
+                    showToast('County lookup failed after retries.');
+                    countyInput.value = '';
+                    return false;
+                }
                 if (zipMatch) {
                     const zip = zipMatch[1];
                     try {
@@ -1476,26 +1507,11 @@
                         if (zipData.places && zipData.places.length > 0) {
                             const lat = zipData.places[0].latitude;
                             const lon = zipData.places[0].longitude;
-                            const fccResp = await fetch(`https://geo.fcc.gov/api/census/area?lat=${lat}&lon=${lon}&format=json`);
-                            if (fccResp.ok) {
-                                const fccData = await fccResp.json();
-                                if (fccData.results && fccData.results.length > 0) {
-                                    let countyName = fccData.results[0].county_name;
-                                    countyName = countyName.replace(/ County$/i, '');
-                                    countyInput.value = countyName.toUpperCase();
-                                    showToast('County autofilled: ' + countyInput.value);
-                                    console.log('County autofilled:', countyInput.value);
-                                    return;
-                                } else {
-                                    showToast('County not found for this location.');
-                                }
-                            } else {
-                                showToast('FCC county lookup failed.');
-                            }
+                            await fetchCountyWithRetry(lat, lon, 2);
                         } else {
                             showToast('ZIP found, but no place data.');
+                            countyInput.value = '';
                         }
-                        countyInput.value = '';
                     } catch (err) {
                         console.error('County lookup error:', err);
                         showToast('County lookup error: ' + err.message);
