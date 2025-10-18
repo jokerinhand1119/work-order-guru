@@ -934,31 +934,63 @@
                                 scanStatus.style.color = '#ffc107';
                             }
                             
-                            // Check if it looks like a VIN
-                            // VINs are typically 17 characters, but accept 14-17 to catch partial reads
-                            if (code.length >= 14 && /^[A-HJ-NPR-Z0-9]+$/.test(code)) {
-                                // Take first 17 chars if longer
-                                const vin = code.length > 17 ? code.substring(0, 17) : code;
+                            // Clean the barcode - VINs should only contain valid characters
+                            const cleanCode = code.replace(/[^A-HJ-NPR-Z0-9]/g, '');
+                            
+                            // Look for exactly 17 valid VIN characters
+                            if (cleanCode.length === 17 && /^[A-HJ-NPR-Z0-9]{17}$/.test(cleanCode)) {
+                                console.log('VIN confirmed (exact 17 chars):', cleanCode);
                                 
-                                // If exactly 17 characters, accept immediately
-                                if (vin.length === 17) {
-                                    console.log('VIN confirmed (17 chars):', vin);
-                                    
-                                    if (scanStatus) {
-                                        scanStatus.textContent = '✓ VIN Found!';
-                                        scanStatus.style.background = 'rgba(0, 255, 136, 0.3)';
-                                        scanStatus.style.color = '#00ff88';
-                                    }
-                                    
-                                    processScannedVIN(vin);
-                                    return;
+                                if (scanStatus) {
+                                    scanStatus.textContent = '✓ VIN Found!';
+                                    scanStatus.style.background = 'rgba(0, 255, 136, 0.3)';
+                                    scanStatus.style.color = '#00ff88';
                                 }
                                 
-                                // For shorter codes, require 2 detections
-                                detectionCount[code] = (detectionCount[code] || 0) + 1;
+                                processScannedVIN(cleanCode);
+                                return;
+                            }
+                            
+                            // If longer than 17, try to extract the 17-character VIN
+                            // Some barcodes have check digits or prefixes
+                            if (cleanCode.length > 17 && cleanCode.length <= 25) {
+                                // Try to find a valid 17-character VIN sequence
+                                // Check from position 0, 1, 2, etc.
+                                for (let i = 0; i <= cleanCode.length - 17; i++) {
+                                    const possibleVin = cleanCode.substring(i, i + 17);
+                                    
+                                    if (/^[A-HJ-NPR-Z0-9]{17}$/.test(possibleVin)) {
+                                        console.log('Possible VIN found at position', i, ':', possibleVin, 'from barcode:', cleanCode);
+                                        
+                                        // Count detections of this specific VIN
+                                        detectionCount[possibleVin] = (detectionCount[possibleVin] || 0) + 1;
+                                        
+                                        // Require 2 detections for VINs extracted from longer barcodes
+                                        if (detectionCount[possibleVin] >= 2) {
+                                            console.log('VIN confirmed (2 detections):', possibleVin);
+                                            
+                                            if (scanStatus) {
+                                                scanStatus.textContent = '✓ VIN Found!';
+                                                scanStatus.style.background = 'rgba(0, 255, 136, 0.3)';
+                                                scanStatus.style.color = '#00ff88';
+                                            }
+                                            
+                                            processScannedVIN(possibleVin);
+                                            return;
+                                        }
+                                        
+                                        // Found a candidate, don't check other positions
+                                        break;
+                                    }
+                                }
+                            }
+                            
+                            // For shorter codes (14-16 chars), require 3 detections
+                            if (cleanCode.length >= 14 && cleanCode.length < 17 && /^[A-HJ-NPR-Z0-9]+$/.test(cleanCode)) {
+                                detectionCount[cleanCode] = (detectionCount[cleanCode] || 0) + 1;
                                 
-                                if (detectionCount[code] >= 2) {
-                                    console.log('VIN confirmed (repeated):', vin);
+                                if (detectionCount[cleanCode] >= 3) {
+                                    console.log('Partial VIN confirmed (3 detections):', cleanCode);
                                     
                                     if (scanStatus) {
                                         scanStatus.textContent = '✓ VIN Found!';
@@ -966,7 +998,7 @@
                                         scanStatus.style.color = '#00ff88';
                                     }
                                     
-                                    processScannedVIN(vin);
+                                    processScannedVIN(cleanCode);
                                     return;
                                 }
                             }
