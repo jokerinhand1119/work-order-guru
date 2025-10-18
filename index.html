@@ -469,6 +469,18 @@
             color: #ff6b7a;
         }
         
+        #share-link-btn {
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            color: #ffd700;
+            border: 1px solid #ffd700;
+        }
+        
+        #share-link-btn:hover {
+            background: linear-gradient(135deg, #2d2d2d 0%, #404040 100%);
+            box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
+            color: #ffed4e;
+        }
+        
         /* Button shimmer effect - Dark Mode */
         .btn-professional::before {
             content: '';
@@ -696,6 +708,7 @@
       <option value="">Select a saved entry...</option>
     </select>
     <button id="delete-entry-btn" class="btn-professional" style="display:none;">Delete</button>
+    <button id="share-link-btn" class="btn-professional" style="display:none;">Share Link</button>
   </div>
   <button id="save-btn" class="btn-professional">Save</button>
   <button id="new-work-order-btn" class="btn-professional">New Work Order</button>
@@ -1616,6 +1629,7 @@ const saveBtn = document.getElementById('save-btn');
 const entrySearch = document.getElementById('entry-search');
 const entriesDropdown = document.getElementById('entries-dropdown');
 const deleteEntryBtn = document.getElementById('delete-entry-btn');
+const shareLinkBtn = document.getElementById('share-link-btn');
 const newOrderBtn = document.getElementById('new-order-btn');
 let entriesCache = {};
 let currentEditKey = null;
@@ -1690,9 +1704,45 @@ function fetchEntries() {
     db.ref('repairOrders').on('value', function(snapshot) {
         entriesCache = snapshot.val() || {};
         renderDropdown(entriesCache, entrySearch.value);
+        
+        // Check if URL has an ID parameter to load a shared work order
+        checkAndLoadSharedWorkOrder();
     });
 }
 fetchEntries();
+
+// Function to check URL parameters and load a shared work order
+function checkAndLoadSharedWorkOrder() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const sharedId = urlParams.get('id');
+    
+    if (sharedId && entriesCache[sharedId]) {
+        // Set the dropdown value to load the work order
+        entriesDropdown.value = sharedId;
+        
+        // Trigger the change event to load the entry
+        const event = new Event('change');
+        entriesDropdown.dispatchEvent(event);
+        
+        // Show a notification that the shared work order was loaded
+        const status = document.getElementById('save-status');
+        status.textContent = '🔗 Shared work order loaded!';
+        status.style.color = '#ffd700';
+        setTimeout(function() { status.textContent = ''; }, 4000);
+        
+        // Clear the URL parameter to clean up the address bar (optional)
+        if (window.history && window.history.replaceState) {
+            const newUrl = window.location.pathname;
+            window.history.replaceState({}, document.title, newUrl);
+        }
+    } else if (sharedId) {
+        // ID was in URL but not found in database
+        const status = document.getElementById('save-status');
+        status.textContent = '⚠️ Work order not found';
+        status.style.color = '#ff4757';
+        setTimeout(function() { status.textContent = ''; }, 4000);
+    }
+}
 
 entrySearch.addEventListener('input', function() {
     renderDropdown(entriesCache, entrySearch.value);
@@ -1724,6 +1774,7 @@ entriesDropdown.addEventListener('change', function() {
     if (!key || !entriesCache[key]) {
         currentEditKey = null;
         deleteEntryBtn.style.display = 'none';
+        shareLinkBtn.style.display = 'none';
         newOrderBtn.style.display = 'none';
         saveBtn.textContent = 'Save';
         document.getElementById('save-status').textContent = '';
@@ -1765,6 +1816,7 @@ entriesDropdown.addEventListener('change', function() {
     saveBtn.textContent = 'Update';
     document.getElementById('save-status').textContent = 'Editing entry...';
     deleteEntryBtn.style.display = 'inline-block';
+    shareLinkBtn.style.display = 'inline-block';
     newOrderBtn.style.display = 'inline-block';
 });
 
@@ -1776,6 +1828,7 @@ deleteEntryBtn.addEventListener('click', function() {
             alert('Error deleting entry!');
         } else {
             deleteEntryBtn.style.display = 'none';
+            shareLinkBtn.style.display = 'none';
             newOrderBtn.style.display = 'none';
             entriesDropdown.value = '';
             currentEditKey = null;
@@ -1787,6 +1840,39 @@ deleteEntryBtn.addEventListener('click', function() {
         }
     });
 });
+
+// Share Link button functionality
+shareLinkBtn.addEventListener('click', function() {
+    if (!currentEditKey) return;
+    
+    // Generate shareable URL with the work order ID
+    const baseUrl = window.location.origin + window.location.pathname;
+    const shareUrl = `${baseUrl}?id=${currentEditKey}`;
+    
+    // Try to copy to clipboard
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(shareUrl).then(function() {
+            // Show success message
+            const status = document.getElementById('save-status');
+            status.textContent = '🔗 Link copied to clipboard!';
+            status.style.color = '#ffd700';
+            setTimeout(function() { status.textContent = ''; }, 3000);
+        }).catch(function(err) {
+            // Fallback if clipboard API fails
+            console.error('Could not copy to clipboard:', err);
+            showShareLinkDialog(shareUrl);
+        });
+    } else {
+        // Fallback for browsers without clipboard API
+        showShareLinkDialog(shareUrl);
+    }
+});
+
+// Helper function to show share link in a dialog (fallback)
+function showShareLinkDialog(url) {
+    const message = 'Share this link:\n\n' + url;
+    prompt(message, url);
+}
 
 // New Work Order button functionality
 document.getElementById('new-work-order-btn').addEventListener('click', function() {
@@ -1814,6 +1900,7 @@ document.getElementById('new-work-order-btn').addEventListener('click', function
     entriesDropdown.value = '';
     entrySearch.value = '';
     deleteEntryBtn.style.display = 'none';
+    shareLinkBtn.style.display = 'none';
     newOrderBtn.style.display = 'none';
     document.getElementById('save-status').textContent = 'New work order ready';
     setTimeout(function() { document.getElementById('save-status').textContent = ''; }, 3000);
@@ -1871,6 +1958,7 @@ newOrderBtn.addEventListener('click', function() {
     saveBtn.textContent = 'Save';
     entriesDropdown.value = '';
     deleteEntryBtn.style.display = 'none';
+    shareLinkBtn.style.display = 'none';
     newOrderBtn.style.display = 'none';
     document.getElementById('save-status').textContent = 'New order ready for same customer/vehicle';
     setTimeout(function() { document.getElementById('save-status').textContent = ''; }, 3000);
