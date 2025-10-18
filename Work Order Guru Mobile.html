@@ -1116,8 +1116,7 @@
 
                 showToast('Vehicle info loaded!');
 
-                // Lookup county
-                lookupCounty(vin);
+                // No longer auto-fill county from VIN
             } catch (err) {
                 console.error('VIN decode error:', err);
                 showToast('Could not decode VIN');
@@ -1126,18 +1125,7 @@
         
         // County Lookup
         async function lookupCounty(vin) {
-            if (!vin || vin.length < 10) return;
-            
-            try {
-                const response = await fetch(`https://corsproxy.io/?https://geo.fcc.gov/api/census/area?lat=37.7749&lon=-122.4194&format=json`);
-                const data = await response.json();
-                
-                if (data.results && data.results.length > 0) {
-                    document.getElementById('county').value = data.results[0].county_name;
-                }
-            } catch (err) {
-                console.error('County lookup error:', err);
-            }
+            // No longer used for VIN, replaced by ZIP lookup on address
         }
         
         // VIN field auto-decode
@@ -1465,6 +1453,26 @@
             
             loadPreviousEntries();
             showToast('Welcome! 📱');
+
+            // County autofill from ZIP in address
+            document.getElementById('address').addEventListener('blur', async function() {
+                const address = this.value;
+                // Find 5-digit ZIP code in address
+                const zipMatch = address.match(/\b\d{5}\b/);
+                if (zipMatch) {
+                    const zip = zipMatch[0];
+                    try {
+                        // Use FCC API to get county from ZIP
+                        const resp = await fetch(`https://geo.fcc.gov/api/census/block/find?format=json&zip=${zip}`);
+                        const data = await resp.json();
+                        if (data && data.County && data.County.name) {
+                            document.getElementById('county').value = data.County.name;
+                        }
+                    } catch (err) {
+                        console.error('County lookup error:', err);
+                    }
+                }
+            });
         });
     </script>
 </body>
