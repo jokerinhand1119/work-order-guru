@@ -599,7 +599,7 @@
                         </div>
                         <div class="form-group">
                             <label class="form-label">Date</label>
-                            <input type="date" class="form-input" id="date">
+                            <input type="text" class="form-input" id="date" placeholder="MM/DD/YYYY">
                         </div>
                     </div>
                 </div>
@@ -1157,7 +1157,7 @@
         window.addEventListener('beforeprint', function() {
             // All basic text fields that map directly
             const basicFields = [
-                'customer_name', 'address', 'phone_number', 'work_order_number',
+                'customer_name', 'address', 'phone_number', 'work_order_number', 'date',
                 'vin_number', 'mileage', 'county', 'license_plate',
                 'tire_tread_lf', 'tire_tread_rf', 'tire_tread_lr', 'tire_tread_rr',
                 'brakes_lf', 'brakes_rf', 'brakes_lr', 'brakes_rr',
@@ -1176,15 +1176,6 @@
                     printField.textContent = input.value || '';
                 }
             });
-            
-            // Format date from YYYY-MM-DD to MM/DD/YYYY
-            const dateInput = document.getElementById('date');
-            const printDate = document.getElementById('print_date');
-            if (dateInput && printDate && dateInput.value) {
-                const dateValue = dateInput.value; // YYYY-MM-DD
-                const [year, month, day] = dateValue.split('-');
-                printDate.textContent = `${month}/${day}/${year}`;
-            }
             
             // Year/Make/Model combined field
             const year = document.getElementById('year')?.value || '';
@@ -1308,7 +1299,12 @@
         function clearForm() {
             if (confirm('Clear all fields?')) {
                 document.querySelectorAll('.form-input').forEach(input => input.value = '');
-                document.getElementById('date').valueAsDate = new Date();
+                // Set today's date in MM/DD/YYYY format
+                const today = new Date();
+                const month = (today.getMonth() + 1).toString().padStart(2, '0');
+                const day = today.getDate().toString().padStart(2, '0');
+                const year = today.getFullYear();
+                document.getElementById('date').value = `${month}/${day}/${year}`;
                 showToast('Form cleared');
             }
         }
@@ -1445,7 +1441,13 @@
         
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
-            document.getElementById('date').valueAsDate = new Date();
+            // Set today's date in MM/DD/YYYY format
+            const today = new Date();
+            const month = (today.getMonth() + 1).toString().padStart(2, '0');
+            const day = today.getDate().toString().padStart(2, '0');
+            const year = today.getFullYear();
+            document.getElementById('date').value = `${month}/${day}/${year}`;
+            
             loadPreviousEntries();
             showToast('Welcome! 📱');
         });
