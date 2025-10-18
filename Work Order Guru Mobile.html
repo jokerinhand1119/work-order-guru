@@ -1481,12 +1481,29 @@
                             countyInput.value = '...'; // loading indicator
                         }
                         try {
-                            const resp = await fetch(`https://geo.fcc.gov/api/census/block/find?format=json&zip=${zip}`);
-                            const data = await resp.json();
-                            if (data && data.County && data.County.name) {
-                                lastCountyFromZip = data.County.name;
-                                if (!countyManuallyEdited) {
-                                    countyInput.value = lastCountyFromZip;
+                            // Step 1: Get lat/lon from Zippopotam.us
+                            const zipResp = await fetch(`https://api.zippopotam.us/us/${zip}`);
+                            if (!zipResp.ok) throw new Error('ZIP not found');
+                            const zipData = await zipResp.json();
+                            if (zipData.places && zipData.places.length > 0) {
+                                const lat = zipData.places[0].latitude;
+                                const lon = zipData.places[0].longitude;
+                                // Step 2: Get county from FCC API
+                                const fccResp = await fetch(`https://geo.fcc.gov/api/census/area?lat=${lat}&lon=${lon}&format=json`);
+                                if (fccResp.ok) {
+                                    const fccData = await fccResp.json();
+                                    if (fccData.results && fccData.results.length > 0) {
+                                        let countyName = fccData.results[0].county_name;
+                                        countyName = countyName.replace(/ County$/i, '');
+                                        lastCountyFromZip = countyName.toUpperCase();
+                                        if (!countyManuallyEdited) {
+                                            countyInput.value = lastCountyFromZip;
+                                        }
+                                    } else if (!countyManuallyEdited) {
+                                        countyInput.value = '';
+                                    }
+                                } else if (!countyManuallyEdited) {
+                                    countyInput.value = '';
                                 }
                             } else if (!countyManuallyEdited) {
                                 countyInput.value = '';
