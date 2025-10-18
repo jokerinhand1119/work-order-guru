@@ -213,31 +213,37 @@
             position: relative;
             flex: 1;
             width: 100%;
+            min-height: 0;
             background: #000;
             overflow: hidden;
-            display: flex;
-            align-items: center;
-            justify-content: center;
         }
         
         #scanner-video {
-            position: absolute;
-            top: 0;
-            left: 0;
+            position: relative;
             width: 100%;
             height: 100%;
         }
         
-        #scanner-video canvas,
-        #scanner-video video {
+        #scanner-video canvas {
             position: absolute !important;
-            top: 0 !important;
-            left: 0 !important;
-            width: 100% !important;
-            height: 100% !important;
+            top: 50% !important;
+            left: 50% !important;
+            transform: translate(-50%, -50%) !important;
             max-width: 100% !important;
             max-height: 100% !important;
-            object-fit: cover !important;
+            width: auto !important;
+            height: auto !important;
+        }
+        
+        #scanner-video video {
+            position: absolute !important;
+            top: 50% !important;
+            left: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            max-width: 100% !important;
+            max-height: 100% !important;
+            width: auto !important;
+            height: auto !important;
         }
         
         .scanner-instructions {
@@ -713,10 +719,12 @@
         </div>
         <div id="scanner-container">
             <div id="scanner-video"></div>
+            <div style="position: absolute; top: 45%; left: 10%; right: 10%; height: 10%; border: 2px solid #00ff88; border-radius: 8px; box-shadow: 0 0 20px rgba(0, 255, 136, 0.5); pointer-events: none;"></div>
+            <div id="scan-status" style="position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0, 255, 136, 0.2); color: #00ff88; padding: 8px 16px; border-radius: 20px; font-weight: bold; display: none;">Reading...</div>
         </div>
         <div class="scanner-instructions">
             <p style="font-size: 18px; font-weight: bold; margin: 5px 0;">Point at VIN barcode</p>
-            <p style="font-size: 14px; margin: 5px 0; opacity: 0.8;">Usually on driver's door jamb or dashboard</p>
+            <p style="font-size: 14px; margin: 5px 0; opacity: 0.8;">Align barcode within green box • Hold steady</p>
         </div>
     </div>
     
@@ -831,19 +839,47 @@
             });
             
             // Handle successful scan
+            let lastScannedCode = '';
+            let sameCodeCount = 0;
+            
             Quagga.onDetected(function(result) {
                 if (!scannerActive) return;
                 
-                const code = result.codeResult.code;
-                console.log("Scanned code:", code);
+                const code = result.codeResult.code.toUpperCase().trim();
+                console.log("Scanned code:", code, "Quality:", result.codeResult.decodedCodes);
                 
-                // VINs are 17 characters
-                if (code && code.length >= 17) {
-                    // Extract first 17 characters (in case scanner gets extra)
-                    const vin = code.substring(0, 17).toUpperCase();
-                    
-                    // Validate VIN format (basic check - alphanumeric, no I, O, Q)
-                    if (/^[A-HJ-NPR-Z0-9]{17}$/.test(vin)) {
+                // Show scanning feedback
+                const scanStatus = document.getElementById('scan-status');
+                if (scanStatus) {
+                    scanStatus.style.display = 'block';
+                    scanStatus.textContent = 'Reading: ' + code.substring(0, 8) + '...';
+                }
+                
+                // Count consecutive same codes for confirmation
+                if (code === lastScannedCode) {
+                    sameCodeCount++;
+                } else {
+                    lastScannedCode = code;
+                    sameCodeCount = 1;
+                }
+                
+                // Require 2 consecutive successful reads for accuracy
+                if (sameCodeCount < 2) return;
+                
+                // VINs are 17 characters - be flexible with length
+                let vin = code;
+                if (code.length >= 17) {
+                    // Extract 17 characters
+                    vin = code.substring(0, 17);
+                } else if (code.length >= 15) {
+                    // Sometimes scanners miss a character or two
+                    console.log("Warning: VIN may be incomplete:", code);
+                    vin = code;
+                }
+                
+                // Validate VIN format (basic check - alphanumeric, no I, O, Q)
+                // Accept 15-17 characters for flexibility
+                if (vin.length >= 15 && /^[A-HJ-NPR-Z0-9]+$/.test(vin)) {
                         // Fill VIN field
                         const vinEditable = document.getElementById('vin_editable');
                         const vinHidden = document.getElementById('input_vin_number');
