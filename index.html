@@ -777,147 +777,172 @@
             }
         });
         
-        function startScanner() {
+        let videoStream = null;
+        let scanningInterval = null;
+        
+        async function startScanner() {
             const overlay = document.getElementById('scanner-overlay');
             overlay.classList.add('active');
             scannerActive = true;
             
-            // Check if Quagga library is loaded
+            const videoContainer = document.getElementById('scanner-video');
+            videoContainer.innerHTML = ''; // Clear previous content
+            
+            // Create video element
+            const video = document.createElement('video');
+            video.setAttribute('playsinline', '');
+            video.setAttribute('autoplay', '');
+            video.style.width = '100%';
+            video.style.height = '100%';
+            video.style.objectFit = 'cover';
+            videoContainer.appendChild(video);
+            
+            try {
+                // Request camera access
+                videoStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'environment',
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
+                });
+                
+                video.srcObject = videoStream;
+                await video.play();
+                
+                console.log('Camera started successfully');
+                
+                // Check if native BarcodeDetector is available (Chrome Android)
+                if ('BarcodeDetector' in window) {
+                    console.log('Using native BarcodeDetector');
+                    startNativeBarcodeScanning(video);
+                } else {
+                    console.log('Using Quagga fallback');
+                    startQuaggaScanning(video);
+                }
+                
+            } catch (err) {
+                console.error('Camera error:', err);
+                alert('Unable to access camera. Please ensure camera permissions are granted.\n\nError: ' + err.message);
+                stopScanner();
+            }
+        }
+        
+        async function startNativeBarcodeScanning(video) {
+            const barcodeDetector = new BarcodeDetector({ formats: ['code_39', 'code_128'] });
+            const scanStatus = document.getElementById('scan-status');
+            
+            scanningInterval = setInterval(async () => {
+                if (!scannerActive) return;
+                
+                try {
+                    const barcodes = await barcodeDetector.detect(video);
+                    
+                    if (barcodes.length > 0) {
+                        const code = barcodes[0].rawValue.toUpperCase().trim();
+                        console.log('Detected barcode:', code);
+                        
+                        if (scanStatus) {
+                            scanStatus.style.display = 'block';
+                            scanStatus.textContent = 'Found: ' + code.substring(0, 10) + '...';
+                        }
+                        
+                        // Check if it looks like a VIN (15-17 characters, alphanumeric, no I/O/Q)
+                        if (code.length >= 15 && code.length <= 17 && /^[A-HJ-NPR-Z0-9]+$/.test(code)) {
+                            processScannedVIN(code);
+                        }
+                    }
+                } catch (err) {
+                    console.error('Barcode detection error:', err);
+                }
+            }, 500); // Scan every 500ms
+        }
+        
+        function startQuaggaScanning(video) {
+            // Fallback to Quagga if BarcodeDetector not available
             if (typeof Quagga === 'undefined') {
-                alert('Camera scanner library not loaded. Please check your internet connection.');
+                alert('Barcode scanning not available. Please try:\n1. Using Chrome browser\n2. Updating your browser\n3. Using a barcode scanner app instead');
                 stopScanner();
                 return;
             }
             
+            const scanStatus = document.getElementById('scan-status');
+            if (scanStatus) {
+                scanStatus.style.display = 'block';
+                scanStatus.textContent = 'Initializing scanner...';
+            }
+            
+            // Quagga implementation as fallback
             Quagga.init({
                 inputStream: {
-                    name: "Live",
                     type: "LiveStream",
                     target: document.querySelector('#scanner-video'),
                     constraints: {
-                        width: { min: 640, ideal: 1920, max: 3840 },
-                        height: { min: 480, ideal: 1080, max: 2160 },
-                        facingMode: "environment", // Use back camera on mobile
-                        aspectRatio: { ideal: 16/9 }
-                    },
-                    area: { // Scanning area - focus on center
-                        top: "15%",
-                        right: "5%",
-                        left: "5%",
-                        bottom: "15%"
-                    },
-                    size: 1920 // Higher resolution for better barcode detection
-                },
-                decoder: {
-                    readers: [
-                        "code_39_reader",      // VINs use Code 39
-                        "code_128_reader"      // Backup for some modern VIN labels
-                    ],
-                    debug: {
-                        drawBoundingBox: true,
-                        showFrequency: false,
-                        drawScanline: true,
-                        showPattern: false
+                        facingMode: "environment"
                     }
                 },
-                locator: {
-                    patchSize: "large",
-                    halfSample: false
-                },
-                numOfWorkers: navigator.hardwareConcurrency || 4,
-                frequency: 5, // Slower but more accurate
-                locate: true
+                decoder: {
+                    readers: ["code_39_reader", "code_128_reader"]
+                }
             }, function(err) {
                 if (err) {
-                    console.error('Scanner initialization error:', err);
-                    alert('Unable to access camera. Please ensure camera permissions are granted.');
+                    console.error('Quagga error:', err);
                     stopScanner();
                     return;
                 }
-                console.log("Scanner initialized successfully");
                 Quagga.start();
-            });
-            
-            // Handle successful scan
-            let lastScannedCode = '';
-            let sameCodeCount = 0;
-            
-            Quagga.onDetected(function(result) {
-                if (!scannerActive) return;
                 
-                const code = result.codeResult.code.toUpperCase().trim();
-                console.log("Scanned code:", code, "Quality:", result.codeResult.decodedCodes);
-                
-                // Show scanning feedback
-                const scanStatus = document.getElementById('scan-status');
-                if (scanStatus) {
-                    scanStatus.style.display = 'block';
-                    scanStatus.textContent = 'Reading: ' + code.substring(0, 8) + '...';
-                }
-                
-                // Count consecutive same codes for confirmation
-                if (code === lastScannedCode) {
-                    sameCodeCount++;
-                } else {
-                    lastScannedCode = code;
-                    sameCodeCount = 1;
-                }
-                
-                // Require 2 consecutive successful reads for accuracy
-                if (sameCodeCount < 2) return;
-                
-                // VINs are 17 characters - be flexible with length
-                let vin = code;
-                if (code.length >= 17) {
-                    // Extract 17 characters
-                    vin = code.substring(0, 17);
-                } else if (code.length >= 15) {
-                    // Sometimes scanners miss a character or two
-                    console.log("Warning: VIN may be incomplete:", code);
-                    vin = code;
-                }
-                
-                // Validate VIN format (basic check - alphanumeric, no I, O, Q)
-                // Accept 15-17 characters for flexibility
-                if (vin.length >= 15 && /^[A-HJ-NPR-Z0-9]+$/.test(vin)) {
-                        // Fill VIN field
-                        const vinEditable = document.getElementById('vin_editable');
-                        const vinHidden = document.getElementById('input_vin_number');
-                        
-                        if (vinEditable) {
-                            vinEditable.textContent = vin;
-                            if (vinHidden) {
-                                vinHidden.value = vin;
-                            }
-                            
-                            // Play success sound (simple beep)
-                            try {
-                                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                                const oscillator = audioContext.createOscillator();
-                                const gainNode = audioContext.createGain();
-                                oscillator.connect(gainNode);
-                                gainNode.connect(audioContext.destination);
-                                oscillator.frequency.value = 800;
-                                oscillator.type = 'sine';
-                                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-                                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
-                                oscillator.start(audioContext.currentTime);
-                                oscillator.stop(audioContext.currentTime + 0.2);
-                            } catch(e) {
-                                console.log('Audio feedback not available');
-                            }
-                            
-                            // Stop scanner
-                            stopScanner();
-                            
-                            // Auto-trigger VIN decode after a brief delay
-                            setTimeout(function() {
-                                decodeVIN(vin);
-                            }, 100);
-                        }
+                Quagga.onDetected(function(result) {
+                    const code = result.codeResult.code.toUpperCase().trim();
+                    console.log('Quagga detected:', code);
+                    
+                    if (code.length >= 15 && code.length <= 17 && /^[A-HJ-NPR-Z0-9]+$/.test(code)) {
+                        processScannedVIN(code);
                     }
-                }
+                });
             });
+        }
+        
+        function processScannedVIN(vin) {
+            if (!scannerActive) return;
+            
+            console.log('Processing VIN:', vin);
+            
+            // Fill VIN field
+            const vinEditable = document.getElementById('vin_editable');
+            const vinHidden = document.getElementById('input_vin_number');
+            
+            if (vinEditable) {
+                vinEditable.textContent = vin;
+                if (vinHidden) {
+                    vinHidden.value = vin;
+                }
+                
+                // Success beep
+                try {
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    const oscillator = audioContext.createOscillator();
+                    const gainNode = audioContext.createGain();
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+                    oscillator.frequency.value = 1000;
+                    oscillator.type = 'sine';
+                    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+                    oscillator.start(audioContext.currentTime);
+                    oscillator.stop(audioContext.currentTime + 0.3);
+                } catch(e) {
+                    console.log('Audio not available');
+                }
+                
+                // Stop scanner
+                stopScanner();
+                
+                // Auto-decode VIN
+                setTimeout(function() {
+                    decodeVIN(vin);
+                }, 100);
+            }
         }
         
         function stopScanner() {
@@ -925,8 +950,31 @@
             const overlay = document.getElementById('scanner-overlay');
             overlay.classList.remove('active');
             
+            // Stop video stream
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+                videoStream = null;
+            }
+            
+            // Stop scanning interval
+            if (scanningInterval) {
+                clearInterval(scanningInterval);
+                scanningInterval = null;
+            }
+            
+            // Stop Quagga if it was used
             if (typeof Quagga !== 'undefined') {
-                Quagga.stop();
+                try {
+                    Quagga.stop();
+                } catch(e) {
+                    console.log('Quagga already stopped');
+                }
+            }
+            
+            // Clear video container
+            const videoContainer = document.getElementById('scanner-video');
+            if (videoContainer) {
+                videoContainer.innerHTML = '';
             }
         }
         
