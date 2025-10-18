@@ -1220,7 +1220,15 @@
                     const data = entry.data;
                     const option = document.createElement('option');
                     option.value = entry.key;
-                    option.textContent = `${data.date || '?'} - ${data.customer_name || '?'} - ${data.year || ''} ${data.make || ''} ${data.model || ''}`;
+                    
+                    // Handle both formats: mobile (customer_name) and original (input_customer_name)
+                    const date = data.date || data.input_date || '?';
+                    const customerName = data.customer_name || data.input_customer_name || '?';
+                    const year = data.year || (data.input_year_make_model_trim ? data.input_year_make_model_trim.split(' ')[0] : '');
+                    const make = data.make || (data.input_year_make_model_trim ? data.input_year_make_model_trim.split(' ')[1] : '');
+                    const model = data.model || (data.input_year_make_model_trim ? data.input_year_make_model_trim.split(' ').slice(2).join(' ') : '');
+                    
+                    option.textContent = `${date} - ${customerName} - ${year} ${make} ${model}`.trim();
                     dropdown.appendChild(option);
                 });
             });
@@ -1234,10 +1242,49 @@
                 const data = snapshot.val();
                 if (!data) return;
                 
+                // Map original file field names (input_*) to mobile field names
+                const fieldMap = {
+                    'input_date': 'date',
+                    'input_customer_name': 'customer_name',
+                    'input_address': 'phone_number',
+                    'input_ro': 'work_order_number',
+                    'input_vin_number': 'vin_number',
+                    'input_year_make_model_trim': 'year_make_model',
+                    'input_odometer': 'mileage',
+                    'input_plate_number': 'license_plate',
+                    'input_county': 'county',
+                    'input_brakes_lf': 'brakes_lf',
+                    'input_brakes_rf': 'brakes_rf',
+                    'input_brakes_lr': 'brakes_lr',
+                    'input_brakes_rr': 'brakes_rr',
+                    'input_tire_tread_lf': 'tire_tread_lf',
+                    'input_tire_tread_rf': 'tire_tread_rf',
+                    'input_tire_tread_lr': 'tire_tread_lr',
+                    'input_tire_tread_rr': 'tire_tread_rr',
+                    'input_description_of_work': 'services_performed',
+                    'input_tech': 'tech_name'
+                };
+                
+                // Load data - try mobile format first, then original format
                 Object.keys(data).forEach(key => {
-                    const el = document.getElementById(key);
-                    if (el) el.value = data[key] || '';
+                    // Try direct match (mobile format)
+                    let el = document.getElementById(key);
+                    if (el) {
+                        el.value = data[key] || '';
+                    } else if (fieldMap[key]) {
+                        // Try mapped field (original format)
+                        el = document.getElementById(fieldMap[key]);
+                        if (el) el.value = data[key] || '';
+                    }
                 });
+                
+                // Special handling for year/make/model split
+                if (data.input_year_make_model_trim) {
+                    const parts = data.input_year_make_model_trim.split(' ');
+                    if (document.getElementById('year')) document.getElementById('year').value = parts[0] || '';
+                    if (document.getElementById('make')) document.getElementById('make').value = parts[1] || '';
+                    if (document.getElementById('model')) document.getElementById('model').value = parts.slice(2).join(' ') || '';
+                }
                 
                 showToast('Entry loaded');
                 
