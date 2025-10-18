@@ -1158,18 +1158,37 @@
         
         // Save Work Order
         function saveWorkOrder() {
+            // Get values
+            const customerName = document.getElementById('customer_name').value;
+            const phoneNumber = document.getElementById('phone_number').value;
+            const woNumber = document.getElementById('work_order_number').value || Date.now().toString();
+            const date = document.getElementById('date').value;
+            const vinNumber = document.getElementById('vin_number').value;
+            const year = document.getElementById('year').value;
+            const make = document.getElementById('make').value;
+            const model = document.getElementById('model').value;
+            const mileage = document.getElementById('mileage').value;
+            const county = document.getElementById('county').value;
+            const licensePlate = document.getElementById('license_plate').value;
+            const servicesPerformed = document.getElementById('services_performed').value;
+            const partsUsed = document.getElementById('parts_used').value;
+            const techName = document.getElementById('tech_name').value;
+            const techNotes = document.getElementById('tech_notes').value;
+            
+            // Save in BOTH formats for compatibility
             const workOrder = {
-                customer_name: document.getElementById('customer_name').value,
-                phone_number: document.getElementById('phone_number').value,
-                work_order_number: document.getElementById('work_order_number').value || Date.now().toString(),
-                date: document.getElementById('date').value,
-                vin_number: document.getElementById('vin_number').value,
-                year: document.getElementById('year').value,
-                make: document.getElementById('make').value,
-                model: document.getElementById('model').value,
-                mileage: document.getElementById('mileage').value,
-                county: document.getElementById('county').value,
-                license_plate: document.getElementById('license_plate').value,
+                // Mobile format
+                customer_name: customerName,
+                phone_number: phoneNumber,
+                work_order_number: woNumber,
+                date: date,
+                vin_number: vinNumber,
+                year: year,
+                make: make,
+                model: model,
+                mileage: mileage,
+                county: county,
+                license_plate: licensePlate,
                 tire_tread_lf: document.getElementById('tire_tread_lf').value,
                 tire_tread_rf: document.getElementById('tire_tread_rf').value,
                 tire_tread_lr: document.getElementById('tire_tread_lr').value,
@@ -1179,14 +1198,33 @@
                 brakes_lr: document.getElementById('brakes_lr').value,
                 brakes_rr: document.getElementById('brakes_rr').value,
                 oil_type: document.getElementById('oil_type').value,
-                services_performed: document.getElementById('services_performed').value,
-                parts_used: document.getElementById('parts_used').value,
-                tech_notes: document.getElementById('tech_notes').value,
-                tech_name: document.getElementById('tech_name').value,
-                timestamp: Date.now()
+                services_performed: servicesPerformed,
+                parts_used: partsUsed,
+                tech_notes: techNotes,
+                tech_name: techName,
+                timestamp: Date.now(),
+                
+                // Original format (for compatibility with Work Order Guru.html)
+                input_date: date,
+                input_customer_name: customerName,
+                input_address: phoneNumber,
+                input_ro: woNumber,
+                input_vin_number: vinNumber,
+                input_year_make_model_trim: `${year} ${make} ${model}`.trim(),
+                input_odometer: mileage,
+                input_county: county,
+                input_plate_number: licensePlate,
+                input_tire_tread_lf: document.getElementById('tire_tread_lf').value,
+                input_tire_tread_rf: document.getElementById('tire_tread_rf').value,
+                input_tire_tread_lr: document.getElementById('tire_tread_lr').value,
+                input_tire_tread_rr: document.getElementById('tire_tread_rr').value,
+                input_brakes_lf: document.getElementById('brakes_lf').value,
+                input_brakes_rf: document.getElementById('brakes_rf').value,
+                input_brakes_lr: document.getElementById('brakes_lr').value,
+                input_brakes_rr: document.getElementById('brakes_rr').value,
+                input_description_of_work: servicesPerformed,
+                input_tech: techName
             };
-            
-            const woNumber = workOrder.work_order_number;
             
             database.ref('repairOrders/' + woNumber).set(workOrder)
                 .then(() => {
