@@ -30,27 +30,29 @@
             }
             
             /* Top App Bar */
-            .app-bar {
+            .toast {
                 position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                height: 56px;
-                background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
-                color: white;
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                padding: 0 16px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-                z-index: 1000;
-            }
-            
-            .app-bar h1 {
+                left: 50%;
+                bottom: 32px;
+                transform: translateX(-50%);
+                background: #ff1744;
+                color: #fff;
+                padding: 20px 40px;
+                border-radius: 24px;
                 font-size: 20px;
-                font-weight: 500;
+                font-weight: bold;
+                box-shadow: 0 2px 16px 4px #0008;
+                border: 4px solid #fff200;
+                opacity: 0;
+                pointer-events: none;
+                z-index: 9999;
+                transition: opacity 0.3s, bottom 0.3s;
             }
-            
+            .toast.show {
+                opacity: 1;
+                bottom: 64px;
+                pointer-events: auto;
+            }
             .icon-btn {
                 width: 40px;
                 height: 40px;
@@ -1314,48 +1316,50 @@
         
         // Load Previous Entries
         function loadPreviousEntries() {
-            console.log('Loading entries from Firebase...');
-            database.ref('repairOrders').on('value', (snapshot) => {
-                const dropdown = document.getElementById('entries-dropdown');
-                dropdown.innerHTML = '<option value="">-- Select Entry --</option>';
-                
-                const entries = [];
-                snapshot.forEach((child) => {
-                    entries.push({ key: child.key, data: child.val() });
-                });
-                
-                console.log(`Found ${entries.length} total entries in database`);
-                
-                // Sort by timestamp or date
-                entries.sort((a, b) => {
-                    const aTime = a.data.timestamp || new Date(a.data.input_date || a.data.date || 0).getTime();
-                    const bTime = b.data.timestamp || new Date(b.data.input_date || b.data.date || 0).getTime();
-                    return bTime - aTime; // Newest first
-                });
-                
-                entries.forEach((entry, index) => {
-                    const data = entry.data;
-                    const option = document.createElement('option');
-                    option.value = entry.key;
+            try {
+                console.log('Loading entries from Firebase...');
+                database.ref('repairOrders').on('value', (snapshot) => {
+                    const dropdown = document.getElementById('entries-dropdown');
+                    dropdown.innerHTML = '<option value="">-- Select Entry --</option>';
                     
-                    // Handle both formats: mobile (customer_name) and original (input_customer_name)
-                    const date = data.date || data.input_date || '?';
-                    const customerName = data.customer_name || data.input_customer_name || '?';
-                    const year = data.year || (data.input_year_make_model_trim ? data.input_year_make_model_trim.split(' ')[0] : '');
-                    const make = data.make || (data.input_year_make_model_trim ? data.input_year_make_model_trim.split(' ')[1] : '');
-                    const model = data.model || (data.input_year_make_model_trim ? data.input_year_make_model_trim.split(' ').slice(2).join(' ') : '');
+                    const entries = [];
+                    snapshot.forEach((child) => {
+                        entries.push({ key: child.key, data: child.val() });
+                    });
                     
-                    option.textContent = `${date} - ${customerName} - ${year} ${make} ${model}`.trim();
-                    dropdown.appendChild(option);
+                    console.log(`Found ${entries.length} total entries in database`);
                     
-                    console.log(`Entry ${index + 1}: ${option.textContent}`);
+                    // Sort by timestamp or date
+                    entries.sort((a, b) => {
+                        const aTime = a.data.timestamp || new Date(a.data.input_date || a.data.date || 0).getTime();
+                        const bTime = b.data.timestamp || new Date(b.data.input_date || b.data.date || 0).getTime();
+                        return bTime - aTime; // Newest first
+                    });
+                    
+                    entries.forEach((entry, index) => {
+                        const data = entry.data;
+                        const option = document.createElement('option');
+                        option.value = entry.key;
+                        
+                        // Handle both formats: mobile (customer_name) and original (input_customer_name)
+                        const date = data.date || data.input_date || '?';
+                        const customerName = data.customer_name || data.input_customer_name || '?';
+                        const year = data.year || (data.input_year_make_model_trim ? data.input_year_make_model_trim.split(' ')[0] : '');
+                        const make = data.make || (data.input_year_make_model_trim ? data.input_year_make_model_trim.split(' ')[1] : '');
+                        const model = data.model || (data.input_year_make_model_trim ? data.input_year_make_model_trim.split(' ').slice(2).join(' ') : '');
+                        
+                        option.textContent = `${date} - ${customerName} - ${year} ${make} ${model}`.trim();
+                        dropdown.appendChild(option);
+                        
+                        console.log(`Entry ${index + 1}: ${option.textContent}`);
+                    });
+                    
+                    showToast(`Loaded ${entries.length} entries`);
                 });
-                
-                showToast(`Loaded ${entries.length} entries`);
-            }).catch((error) => {
+            } catch (error) {
                 console.error('Error loading entries:', error);
                 showToast('Error: ' + error.message);
-            });
+            }
         }
         
         // Load selected entry
@@ -1452,7 +1456,7 @@
             document.getElementById('date').value = `${month}/${day}/${year}`;
             
             loadPreviousEntries();
-            showToast('Welcome! 📱');
+            showToast('Welcome! 📱 (Script running)');
 
             // County autofill from ZIP in address (on input and blur)
             const countyInput = document.getElementById('input_county');
