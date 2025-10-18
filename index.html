@@ -872,17 +872,30 @@
                             }
                             
                             // Check if it looks like a VIN
-                            // VINs are typically 17 characters, but accept 11-17 to catch partial reads
-                            if (code.length >= 11 && /^[A-HJ-NPR-Z0-9]+$/.test(code)) {
-                                // Count detections for confirmation
+                            // VINs are typically 17 characters, but accept 14-17 to catch partial reads
+                            if (code.length >= 14 && /^[A-HJ-NPR-Z0-9]+$/.test(code)) {
+                                // Take first 17 chars if longer
+                                const vin = code.length > 17 ? code.substring(0, 17) : code;
+                                
+                                // If exactly 17 characters, accept immediately
+                                if (vin.length === 17) {
+                                    console.log('VIN confirmed (17 chars):', vin);
+                                    
+                                    if (scanStatus) {
+                                        scanStatus.textContent = '✓ VIN Found!';
+                                        scanStatus.style.background = 'rgba(0, 255, 136, 0.3)';
+                                        scanStatus.style.color = '#00ff88';
+                                    }
+                                    
+                                    processScannedVIN(vin);
+                                    return;
+                                }
+                                
+                                // For shorter codes, require 2 detections
                                 detectionCount[code] = (detectionCount[code] || 0) + 1;
                                 
-                                // If detected 2+ times or is exactly 17 characters, accept it
-                                if (detectionCount[code] >= 2 || code.length === 17) {
-                                    console.log('VIN confirmed:', code);
-                                    
-                                    // Take first 17 chars if longer
-                                    const vin = code.length > 17 ? code.substring(0, 17) : code;
+                                if (detectionCount[code] >= 2) {
+                                    console.log('VIN confirmed (repeated):', vin);
                                     
                                     if (scanStatus) {
                                         scanStatus.textContent = '✓ VIN Found!';
@@ -907,7 +920,7 @@
                         scanStatus.textContent = 'Scanning... Point at barcode';
                     }
                 }
-            }, 200); // Scan every 200ms (faster)
+            }, 100); // Scan every 100ms (10 times per second)
         }
         
         function startQuaggaScanning(video) {
