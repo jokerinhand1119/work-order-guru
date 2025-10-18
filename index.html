@@ -1026,6 +1026,37 @@
                 }
                 
                 Quagga.start();
+                
+                // Fix Quagga's canvas/video sizing after it starts
+                setTimeout(function() {
+                    const videoContainer = document.getElementById('scanner-video');
+                    if (videoContainer) {
+                        const videos = videoContainer.querySelectorAll('video');
+                        const canvases = videoContainer.querySelectorAll('canvas');
+                        
+                        videos.forEach(function(vid) {
+                            vid.style.width = '100%';
+                            vid.style.height = '100%';
+                            vid.style.objectFit = 'contain';
+                            vid.style.maxWidth = '100%';
+                            vid.style.maxHeight = '100%';
+                            vid.style.position = 'relative';
+                        });
+                        
+                        canvases.forEach(function(canvas) {
+                            canvas.style.width = '100%';
+                            canvas.style.height = '100%';
+                            canvas.style.objectFit = 'contain';
+                            canvas.style.maxWidth = '100%';
+                            canvas.style.maxHeight = '100%';
+                            canvas.style.position = 'absolute';
+                            canvas.style.top = '0';
+                            canvas.style.left = '0';
+                        });
+                        
+                        console.log('Resized Quagga elements:', videos.length, 'videos,', canvases.length, 'canvases');
+                    }
+                }, 500);
             });
             
             Quagga.onDetected(function(result) {
