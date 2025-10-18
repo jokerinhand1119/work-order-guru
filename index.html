@@ -222,28 +222,18 @@
             position: relative;
             width: 100%;
             height: 100%;
-        }
-        
-        #scanner-video canvas {
-            position: absolute !important;
-            top: 50% !important;
-            left: 50% !important;
-            transform: translate(-50%, -50%) !important;
-            max-width: 100% !important;
-            max-height: 100% !important;
-            width: auto !important;
-            height: auto !important;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #000;
         }
         
         #scanner-video video {
-            position: absolute !important;
-            top: 50% !important;
-            left: 50% !important;
-            transform: translate(-50%, -50%) !important;
-            max-width: 100% !important;
-            max-height: 100% !important;
-            width: auto !important;
-            height: auto !important;
+            max-width: 100%;
+            max-height: 100%;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
         }
         
         .scanner-instructions {
@@ -724,7 +714,8 @@
         </div>
         <div class="scanner-instructions">
             <p style="font-size: 18px; font-weight: bold; margin: 5px 0;">Point at VIN barcode</p>
-            <p style="font-size: 14px; margin: 5px 0; opacity: 0.8;">Align barcode within green box • Hold steady</p>
+            <p style="font-size: 14px; margin: 5px 0; opacity: 0.8;">Align barcode within green box • Hold steady • Good lighting helps</p>
+            <button id="manual-vin-btn" style="margin-top: 10px; padding: 10px 20px; background: #555; color: white; border: none; border-radius: 6px; font-size: 14px; cursor: pointer;">Can't scan? Type VIN manually</button>
         </div>
     </div>
     
@@ -775,6 +766,20 @@
                     }
                 });
             }
+            
+            // Manual VIN entry button (loaded after scanner opens)
+            setTimeout(function() {
+                const manualBtn = document.getElementById('manual-vin-btn');
+                if (manualBtn) {
+                    manualBtn.addEventListener('click', function() {
+                        stopScanner();
+                        const vinEditable = document.getElementById('vin_editable');
+                        if (vinEditable) {
+                            vinEditable.focus();
+                        }
+                    });
+                }
+            }, 1000);
         });
         
         let videoStream = null;
@@ -814,10 +819,20 @@
                 
                 // Check if native BarcodeDetector is available (Chrome Android)
                 if ('BarcodeDetector' in window) {
-                    console.log('Using native BarcodeDetector');
+                    console.log('Using native BarcodeDetector - this should work great!');
+                    const scanStatus = document.getElementById('scan-status');
+                    if (scanStatus) {
+                        scanStatus.style.display = 'block';
+                        scanStatus.textContent = 'Camera ready - point at VIN barcode';
+                    }
                     startNativeBarcodeScanning(video);
                 } else {
-                    console.log('Using Quagga fallback');
+                    console.log('BarcodeDetector not available, using Quagga fallback');
+                    const scanStatus = document.getElementById('scan-status');
+                    if (scanStatus) {
+                        scanStatus.style.display = 'block';
+                        scanStatus.textContent = 'Loading scanner...';
+                    }
                     startQuaggaScanning(video);
                 }
                 
@@ -829,8 +844,14 @@
         }
         
         async function startNativeBarcodeScanning(video) {
-            const barcodeDetector = new BarcodeDetector({ formats: ['code_39', 'code_128'] });
+            const barcodeDetector = new BarcodeDetector({ formats: ['code_39', 'code_128', 'ean_13', 'ean_8', 'itf'] });
             const scanStatus = document.getElementById('scan-status');
+            let detectionCount = {};
+            
+            if (scanStatus) {
+                scanStatus.style.display = 'block';
+                scanStatus.textContent = 'Ready to scan...';
+            }
             
             scanningInterval = setInterval(async () => {
                 if (!scannerActive) return;
@@ -839,23 +860,54 @@
                     const barcodes = await barcodeDetector.detect(video);
                     
                     if (barcodes.length > 0) {
-                        const code = barcodes[0].rawValue.toUpperCase().trim();
-                        console.log('Detected barcode:', code);
-                        
-                        if (scanStatus) {
-                            scanStatus.style.display = 'block';
-                            scanStatus.textContent = 'Found: ' + code.substring(0, 10) + '...';
+                        for (const barcode of barcodes) {
+                            const code = barcode.rawValue.toUpperCase().trim();
+                            console.log('Detected barcode:', code, 'format:', barcode.format);
+                            
+                            if (scanStatus) {
+                                scanStatus.style.display = 'block';
+                                scanStatus.textContent = 'Reading: ' + code.substring(0, 12) + '...';
+                                scanStatus.style.background = 'rgba(255, 193, 7, 0.3)';
+                                scanStatus.style.color = '#ffc107';
+                            }
+                            
+                            // Check if it looks like a VIN
+                            // VINs are typically 17 characters, but accept 11-17 to catch partial reads
+                            if (code.length >= 11 && /^[A-HJ-NPR-Z0-9]+$/.test(code)) {
+                                // Count detections for confirmation
+                                detectionCount[code] = (detectionCount[code] || 0) + 1;
+                                
+                                // If detected 2+ times or is exactly 17 characters, accept it
+                                if (detectionCount[code] >= 2 || code.length === 17) {
+                                    console.log('VIN confirmed:', code);
+                                    
+                                    // Take first 17 chars if longer
+                                    const vin = code.length > 17 ? code.substring(0, 17) : code;
+                                    
+                                    if (scanStatus) {
+                                        scanStatus.textContent = '✓ VIN Found!';
+                                        scanStatus.style.background = 'rgba(0, 255, 136, 0.3)';
+                                        scanStatus.style.color = '#00ff88';
+                                    }
+                                    
+                                    processScannedVIN(vin);
+                                    return;
+                                }
+                            }
                         }
-                        
-                        // Check if it looks like a VIN (15-17 characters, alphanumeric, no I/O/Q)
-                        if (code.length >= 15 && code.length <= 17 && /^[A-HJ-NPR-Z0-9]+$/.test(code)) {
-                            processScannedVIN(code);
+                    } else {
+                        // Clear old detection counts if no barcodes found
+                        if (Object.keys(detectionCount).length > 5) {
+                            detectionCount = {};
                         }
                     }
                 } catch (err) {
                     console.error('Barcode detection error:', err);
+                    if (scanStatus) {
+                        scanStatus.textContent = 'Scanning... Point at barcode';
+                    }
                 }
-            }, 500); // Scan every 500ms
+            }, 200); // Scan every 200ms (faster)
         }
         
         function startQuaggaScanning(video) {
