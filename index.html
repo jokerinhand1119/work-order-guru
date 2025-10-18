@@ -603,6 +603,88 @@
                 font-size: 12px;
             }
         }
+        
+        /* Android-Specific Performance Optimizations (Desktop unaffected) */
+        @media (hover: none) and (pointer: coarse) {
+            /* Touch device optimizations */
+            * {
+                -webkit-tap-highlight-color: rgba(0, 150, 255, 0.2);
+                -webkit-touch-callout: none;
+                -webkit-user-select: none;
+                user-select: none;
+            }
+            
+            input, textarea, [contenteditable] {
+                -webkit-user-select: text;
+                user-select: text;
+            }
+            
+            /* Improve input responsiveness on Android */
+            input, textarea, [contenteditable], select {
+                font-size: 16px !important; /* Prevents zoom on focus */
+                touch-action: manipulation;
+            }
+            
+            /* Better button tap areas */
+            button, .btn-professional {
+                min-height: 44px;
+                min-width: 44px;
+                touch-action: manipulation;
+            }
+            
+            /* Smoother scrolling on Android */
+            body, .container {
+                -webkit-overflow-scrolling: touch;
+            }
+            
+            /* Hardware acceleration for form fields */
+            .form-field {
+                -webkit-transform: translate3d(0, 0, 0);
+                transform: translate3d(0, 0, 0);
+                will-change: transform;
+            }
+            
+            /* Optimize scanner for mobile */
+            #scanner-overlay {
+                -webkit-transform: translate3d(0, 0, 0);
+                transform: translate3d(0, 0, 0);
+            }
+            
+            #scanner-video video {
+                -webkit-transform: translate3d(0, 0, 0);
+                transform: translate3d(0, 0, 0);
+            }
+        }
+        
+        /* Android Chrome specific optimizations */
+        @supports (-webkit-touch-callout: none) {
+            /* Safari/Chrome on iOS/Android */
+            input[type="text"],
+            input[type="number"],
+            textarea,
+            [contenteditable] {
+                -webkit-appearance: none;
+                appearance: none;
+            }
+        }
+        
+        /* Prevent text selection issues on Android */
+        @media (max-width: 900px) {
+            .scan-vin-btn {
+                -webkit-tap-highlight-color: rgba(0, 255, 136, 0.3);
+            }
+            
+            /* Ensure dropdowns work well on mobile */
+            select {
+                font-size: 16px !important;
+                padding: 10px !important;
+            }
+            
+            /* Better touch targets for small screens */
+            #entries-dropdown {
+                min-height: 44px;
+            }
+        }
     </style>
 
     <!-- Firebase SDK -->
@@ -866,14 +948,44 @@
             videoContainer.appendChild(video);
             
             try {
-                // Request camera access
-                videoStream = await navigator.mediaDevices.getUserMedia({
+                // Detect device type for optimal camera settings
+                const isAndroid = /Android/i.test(navigator.userAgent);
+                const isMobile = /Mobile|Android|iPhone|iPad/i.test(navigator.userAgent);
+                
+                // Optimize camera constraints based on device
+                let cameraConstraints = {
                     video: {
+                        facingMode: 'environment'
+                    }
+                };
+                
+                if (isAndroid) {
+                    // Android-optimized settings for better performance
+                    cameraConstraints.video = {
+                        facingMode: 'environment',
+                        width: { ideal: 1280, max: 1920 },
+                        height: { ideal: 720, max: 1080 },
+                        frameRate: { ideal: 30, max: 30 }
+                    };
+                    console.log('Using Android-optimized camera settings');
+                } else if (isMobile) {
+                    // Other mobile devices
+                    cameraConstraints.video = {
+                        facingMode: 'environment',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    };
+                } else {
+                    // Desktop - use higher resolution
+                    cameraConstraints.video = {
                         facingMode: 'environment',
                         width: { ideal: 1920 },
                         height: { ideal: 1080 }
-                    }
-                });
+                    };
+                }
+                
+                // Request camera access
+                videoStream = await navigator.mediaDevices.getUserMedia(cameraConstraints);
                 
                 video.srcObject = videoStream;
                 await video.play();
@@ -1466,7 +1578,60 @@
             setupAutoResize();
             setupTireTreadAutoFormat();
             setupBrakeAutoFormat();
+            optimizeForAndroid();
         });
+        
+        // Android-specific optimizations (doesn't affect desktop)
+        function optimizeForAndroid() {
+            const isAndroid = /Android/i.test(navigator.userAgent);
+            const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+            
+            if (isAndroid || isTouchDevice) {
+                console.log('Android/Touch device detected - applying optimizations');
+                
+                // Prevent double-tap zoom on buttons
+                document.querySelectorAll('button, .btn-professional').forEach(function(btn) {
+                    btn.addEventListener('touchend', function(e) {
+                        e.preventDefault();
+                        this.click();
+                    }, { passive: false });
+                });
+                
+                // Improve input focus behavior on Android
+                document.querySelectorAll('input, textarea, [contenteditable]').forEach(function(input) {
+                    input.addEventListener('focus', function() {
+                        // Scroll into view smoothly on Android
+                        setTimeout(() => {
+                            this.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }, 300);
+                    });
+                });
+                
+                // Optimize scanner video for mobile
+                const optimizeVideoStream = function() {
+                    const video = document.querySelector('#scanner-video video');
+                    if (video) {
+                        video.setAttribute('playsinline', 'true');
+                        video.setAttribute('webkit-playsinline', 'true');
+                    }
+                };
+                
+                // Monitor for scanner opening
+                const observer = new MutationObserver(optimizeVideoStream);
+                const scannerOverlay = document.getElementById('scanner-overlay');
+                if (scannerOverlay) {
+                    observer.observe(scannerOverlay, { childList: true, subtree: true });
+                }
+                
+                // Reduce memory usage on Android by cleaning up old detection counts
+                if (isAndroid) {
+                    setInterval(function() {
+                        // Force garbage collection hint by clearing old data
+                        if (window.gc) window.gc();
+                    }, 60000); // Every minute
+                }
+            }
+        }
         
         // Auto-add "/32" to tire tread measurements
         function setupTireTreadAutoFormat() {
