@@ -1831,29 +1831,23 @@
         // Open IDENTIFIX with VIN
         function openIDENTIFIX() {
             const vin = document.getElementById('vin_number').value.trim();
-            const year = document.getElementById('year').value.trim();
-            const make = document.getElementById('make').value.trim();
-            const model = document.getElementById('model').value.trim();
             
-            // IDENTIFIX Direct URL - adjust based on your subscription type
-            // This is the standard web login URL - may need adjustment for your specific IDENTIFIX portal
-            let identifixURL = 'https://www.identifix.com/';
-            
-            // If VIN is available, add it as a search parameter (some IDENTIFIX portals support this)
-            if (vin && vin.length === 17) {
-                // Try direct VIN search - URL structure may vary by IDENTIFIX version
-                identifixURL = `https://www.identifix.com/search?vin=${encodeURIComponent(vin)}`;
-                showToast('Opening IDENTIFIX with VIN...');
-            } else if (year && make && model) {
-                // If no VIN, try vehicle search
-                identifixURL = `https://www.identifix.com/search?year=${encodeURIComponent(year)}&make=${encodeURIComponent(make)}&model=${encodeURIComponent(model)}`;
-                showToast('Opening IDENTIFIX with vehicle info...');
-            } else {
-                showToast('Opening IDENTIFIX... (Add VIN or vehicle info for auto-search)');
-            }
+            // IDENTIFIX DirectHit login page
+            const identifixURL = 'https://dh.identifix.com/Default/LogOnIdentifix';
             
             // Open in new tab
             window.open(identifixURL, '_blank');
+            
+            // Show helpful message
+            if (vin && vin.length === 17) {
+                showToast(`Opening IDENTIFIX - VIN: ${vin} (copied to clipboard)`);
+                // Copy VIN to clipboard for easy paste
+                navigator.clipboard.writeText(vin).catch(() => {
+                    showToast('Opening IDENTIFIX...');
+                });
+            } else {
+                showToast('Opening IDENTIFIX login...');
+            }
         }
         
         // VIN Decoder
