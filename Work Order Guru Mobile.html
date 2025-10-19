@@ -1332,7 +1332,7 @@
     <!-- Scanner -->
     <div class="scanner-overlay" id="scanner-overlay">
         <div class="scanner-header">
-            <span>Scan VIN Barcode</span>
+            <span>Scan VIN Barcode or QR Code</span>
             <button class="close-scanner" onclick="closeScanner()">✕</button>
         </div>
         <div class="scanner-video-container" id="scanner-video"></div>
@@ -1612,10 +1612,10 @@
         
         async function startBarcodeScanning(video) {
             const barcodeDetector = new BarcodeDetector({ 
-                formats: ['code_39', 'code_128', 'ean_13', 'ean_8', 'itf'] 
+                formats: ['code_39', 'code_128', 'ean_13', 'ean_8', 'itf', 'qr_code', 'data_matrix'] 
             });
             const scanStatus = document.getElementById('scan-status');
-            scanStatus.textContent = 'Ready to scan...';
+            scanStatus.textContent = 'Ready to scan VIN barcode or QR code...';
             
             scanningInterval = setInterval(async () => {
                 if (!scannerActive) return;
