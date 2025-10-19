@@ -2135,23 +2135,22 @@
             
             // Step 2: Find license plate - multiple strategies
             
-            // Strategy 1: Look for plate near keywords
+            // Strategy 1: Look for plate near keywords (handles multiple spaces)
             for (let i = 0; i < lines.length; i++) {
                 const line = lines[i];
                 
                 // Check if line has plate keywords
                 if (/(?:PLATE|TAG|REG|LICENSE|LIC)/i.test(line)) {
-                    // Extract alphanumeric after keyword
-                    const match = line.match(/(?:PLATE|TAG|REG(?:ISTRATION)?|LICENSE|LIC\.?)\s*(?:NUMBER|NO\.?|#)?\s*[:\s]*([A-Z0-9\s-]{5,10})/i);
+                    // Extract alphanumeric after keyword - allow multiple spaces
+                    const match = line.match(/(?:PLATE|TAG|REG(?:ISTRATION)?|LICENSE|LIC\.?)\s*(?:NUMBER|NO\.?|#)?\s*[:.\s]*([A-Z0-9]{5,8})\b/i);
                     if (match) {
-                        const plate = match[1].replace(/[\s-]/g, '').toUpperCase();
-                        if (plate.length >= 5 && plate.length <= 8) {
-                            document.getElementById('license_plate').value = plate;
-                            plateFound = true;
-                            fieldsFound++;
-                            console.log('Plate found (keyword):', plate, 'from line:', line);
-                            break;
-                        }
+                        const plate = match[1].toUpperCase();
+                        // Validate it's a reasonable plate (has both letters and numbers typically)
+                        document.getElementById('license_plate').value = plate;
+                        plateFound = true;
+                        fieldsFound++;
+                        console.log('Plate found (keyword):', plate, 'from line:', line);
+                        break;
                     }
                 }
             }
@@ -2163,6 +2162,8 @@
                     
                     // Skip if this is the VIN line
                     if (vinFound && line.includes(document.getElementById('vin_number').value)) continue;
+                    // Skip if has plate keyword (already tried above)
+                    if (/(?:PLATE|TAG|REG|LICENSE|LIC)/i.test(line)) continue;
                     
                     // Common plate patterns (with or without spaces/dashes)
                     const platePatterns = [
@@ -2198,6 +2199,8 @@
                     // Skip VIN line and very short/long lines
                     if (vinFound && line.includes(document.getElementById('vin_number').value)) continue;
                     if (line.length < 5 || line.length > 10) continue;
+                    // Skip lines with keywords (already tried)
+                    if (/(?:PLATE|TAG|REG|LICENSE|LIC)/i.test(line)) continue;
                     
                     // Remove spaces and check if it's alphanumeric
                     const cleaned = line.replace(/[\s-]/g, '');
