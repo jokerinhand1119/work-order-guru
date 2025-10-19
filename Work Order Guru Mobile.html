@@ -135,6 +135,18 @@
                     color: #ffffff;
                 }
                 
+                #firebase-status-text.status-connecting {
+                    color: #ffb74d !important;
+                }
+                
+                #firebase-status-text.status-connected {
+                    color: #66bb6a !important;
+                }
+                
+                #firebase-status-text.status-error {
+                    color: #ef5350 !important;
+                }
+                
                 .bottom-nav {
                     background: linear-gradient(180deg, rgba(42, 42, 60, 0.98) 0%, rgba(35, 35, 50, 1) 100%);
                     border-top: 1px solid rgba(255,255,255,0.1);
@@ -237,9 +249,37 @@
                 border-radius: 50%;
                 background: #ffc107;
                 animation: pulse 2s infinite;
+                box-shadow: 0 0 8px rgba(255, 193, 7, 0.6);
             }
             
-            .status-indicator.connected { background: #4caf50; }
+            .status-indicator.connected { 
+                background: #4caf50;
+                box-shadow: 0 0 8px rgba(76, 175, 80, 0.6);
+                animation: none;
+            }
+            
+            .status-indicator.error { 
+                background: #f44336;
+                box-shadow: 0 0 8px rgba(244, 67, 54, 0.6);
+                animation: pulse 1s infinite;
+            }
+            
+            #firebase-status-text {
+                font-weight: 600;
+                transition: color 0.3s;
+            }
+            
+            #firebase-status-text.status-connecting {
+                color: #f57c00;
+            }
+            
+            #firebase-status-text.status-connected {
+                color: #2e7d32;
+            }
+            
+            #firebase-status-text.status-error {
+                color: #c62828;
+            }
             
             @keyframes pulse {
                 0%, 100% { opacity: 1; }
@@ -1224,9 +1264,14 @@
             // Status indicator with timeout
             let connectionTimeout = setTimeout(() => {
                 const statusText = document.getElementById('firebase-status-text');
+                const indicator = document.getElementById('status-indicator');
                 if (statusText && statusText.textContent === 'Connecting...') {
-                    statusText.textContent = 'Check Firebase Rules';
-                    statusText.style.color = '#ff9800';
+                    statusText.textContent = 'Connection Timeout';
+                    statusText.className = 'status-error';
+                    if (indicator) {
+                        indicator.classList.remove('connected');
+                        indicator.classList.add('error');
+                    }
                 }
             }, 10000); // 10 second timeout
             
@@ -1235,22 +1280,35 @@
                 const statusText = document.getElementById('firebase-status-text');
                 if (snapshot.val() === true) {
                     clearTimeout(connectionTimeout);
-                    if (indicator) indicator.classList.add('connected');
+                    if (indicator) {
+                        indicator.classList.remove('error');
+                        indicator.classList.add('connected');
+                    }
                     if (statusText) {
                         statusText.textContent = 'Connected';
-                        statusText.style.color = '';
+                        statusText.className = 'status-connected';
                     }
                 } else {
-                    if (indicator) indicator.classList.remove('connected');
-                    if (statusText) statusText.textContent = 'Connecting...';
+                    if (indicator) {
+                        indicator.classList.remove('connected');
+                        indicator.classList.remove('error');
+                    }
+                    if (statusText) {
+                        statusText.textContent = 'Connecting...';
+                        statusText.className = 'status-connecting';
+                    }
                 }
             });
         } catch (error) {
             console.error('Firebase init error:', error);
             const statusText = document.getElementById('firebase-status-text');
+            const indicator = document.getElementById('status-indicator');
             if (statusText) {
-                statusText.textContent = 'Error: ' + error.message;
-                statusText.style.color = '#f44336';
+                statusText.textContent = 'Connection Error';
+                statusText.className = 'status-error';
+            }
+            if (indicator) {
+                indicator.classList.add('error');
             }
         }
         
