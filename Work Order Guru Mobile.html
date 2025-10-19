@@ -2617,24 +2617,32 @@
             loadPreviousEntries();
             showToast('Welcome! 📱');
             
-            // Double-tap back button to exit
+            // Double-tap back button to exit - works always, not just when fields filled
             let backPressedOnce = false;
             let backPressTimeout = null;
             
-            // Add a state to history to intercept back button
-            window.history.pushState({ page: 'app' }, '', window.location.href);
+            // Add a dummy state to history immediately
+            window.history.pushState({ preventBack: true }, '');
             
+            // Listen for back button
             window.addEventListener('popstate', function(event) {
+                event.preventDefault();
+                event.stopPropagation();
+                
                 if (backPressedOnce) {
-                    // Second press within 2 seconds - allow exit
+                    // Second press within 2 seconds - actually exit
+                    backPressedOnce = false;
+                    if (backPressTimeout) clearTimeout(backPressTimeout);
+                    // Remove our listener and go back
+                    window.removeEventListener('popstate', arguments.callee);
                     window.history.back();
                 } else {
-                    // First press - show message and prevent exit
+                    // First press - show message and stay
                     backPressedOnce = true;
                     showToast('Press back again to exit');
                     
-                    // Push state again to stay on page
-                    window.history.pushState({ page: 'app' }, '', window.location.href);
+                    // Push state again to prevent exit
+                    window.history.pushState({ preventBack: true }, '');
                     
                     // Reset after 2 seconds
                     if (backPressTimeout) clearTimeout(backPressTimeout);
@@ -2642,7 +2650,7 @@
                         backPressedOnce = false;
                     }, 2000);
                 }
-            });
+            }, false);
 
             // County autofill from ZIP in address (on input and blur)
             const countyInput = document.getElementById('input_county');
