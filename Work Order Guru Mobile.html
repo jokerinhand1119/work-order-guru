@@ -1058,7 +1058,10 @@
                     </div>
                     <div class="form-group">
                         <label class="form-label">Phone</label>
-                        <input type="tel" class="form-input" id="phone_number" placeholder="Phone">
+                        <div class="form-input-group">
+                            <input type="tel" class="form-input has-icon" id="phone_number" placeholder="Phone">
+                            <button class="input-icon" onclick="callCustomer()" style="background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);">📞</button>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label class="form-label">County</label>
@@ -1886,6 +1889,28 @@
             } else {
                 showToast('Opening IDENTIFIX login...');
             }
+        }
+        
+        // Call Customer
+        function callCustomer() {
+            const phone = document.getElementById('phone_number').value.trim();
+            
+            if (!phone) {
+                showToast('Please enter a phone number first');
+                return;
+            }
+            
+            // Remove all non-numeric characters for the tel: link
+            const cleanPhone = phone.replace(/\D/g, '');
+            
+            if (cleanPhone.length < 10) {
+                showToast('Phone number seems incomplete');
+                return;
+            }
+            
+            // Create tel: link and open it
+            window.location.href = `tel:${cleanPhone}`;
+            showToast(`Calling ${phone}...`);
         }
         
         // License Plate Scanner with OCR
@@ -3195,6 +3220,32 @@
             if (addressInput) {
                 addressInput.addEventListener('input', updateCountyFromAddress);
                 addressInput.addEventListener('blur', updateCountyFromAddress);
+            }
+            
+            // Auto-format phone number as (123) 456-7890
+            const phoneInput = document.getElementById('phone_number');
+            if (phoneInput) {
+                phoneInput.addEventListener('input', function(e) {
+                    // Get only numbers
+                    let value = e.target.value.replace(/\D/g, '');
+                    
+                    // Limit to 10 digits
+                    value = value.substring(0, 10);
+                    
+                    // Format as (123) 456-7890
+                    let formatted = '';
+                    if (value.length > 0) {
+                        formatted = '(' + value.substring(0, 3);
+                    }
+                    if (value.length >= 3) {
+                        formatted += ') ' + value.substring(3, 6);
+                    }
+                    if (value.length >= 6) {
+                        formatted += '-' + value.substring(6, 10);
+                    }
+                    
+                    e.target.value = formatted;
+                });
             }
         });
     </script>
