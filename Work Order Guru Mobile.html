@@ -1624,8 +1624,27 @@
                     const barcodes = await barcodeDetector.detect(video);
                     if (barcodes.length > 0) {
                         for (const barcode of barcodes) {
-                            let code = barcode.rawValue.toUpperCase().trim();
-                            code = code.replace(/[^A-HJ-NPR-Z0-9]/g, '');
+                            let rawCode = barcode.rawValue.toUpperCase().trim();
+                            
+                            // For QR codes, try to extract VIN from the data
+                            let vinMatch = null;
+                            
+                            // Check if it's a QR code with embedded VIN
+                            if (barcode.format === 'qr_code') {
+                                // Try to find 17-character VIN pattern in QR data
+                                vinMatch = rawCode.match(/\b([A-HJ-NPR-Z0-9]{17})\b/);
+                                if (vinMatch) {
+                                    scanStatus.textContent = '✓ VIN Found in QR Code!';
+                                    document.getElementById('vin_number').value = vinMatch[1];
+                                    closeScanner();
+                                    showToast('VIN scanned from QR code!');
+                                    decodeVIN(vinMatch[1]);
+                                    return;
+                                }
+                            }
+                            
+                            // For regular barcodes, clean and validate
+                            let code = rawCode.replace(/[^A-HJ-NPR-Z0-9]/g, '');
                             
                             scanStatus.textContent = 'Reading: ' + code.substring(0, 15);
                             
