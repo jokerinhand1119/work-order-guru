@@ -2105,7 +2105,7 @@
         }
         
         function parseRegistrationData(text) {
-            const lines = text.split('\n').map(line => line.trim()).filter(line => line);
+            const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
             let fieldsFound = 0;
             
             console.log('=== OCR Full Text ===');
@@ -2113,118 +2113,86 @@
             console.log('=== OCR Lines ===');
             lines.forEach((line, i) => console.log(`Line ${i}: "${line}"`));
             
-            // Improved patterns for registration cards
-            const patterns = {
-                // VIN: 17 alphanumeric characters (excluding I, O, Q)
-                vin: /\b([A-HJ-NPR-Z0-9]{17})\b/gi,
-                // Name: Look for common name patterns - usually ALL CAPS on registration
-                name: /(?:(?:NAME|OWNER|REGISTERED\s*TO|REGISTRANT)[:\s]*([A-Z]{3,}\s+[A-Z]{2,}[A-Z\s]*)|^([A-Z]{3,}\s+[A-Z]{2,}[A-Z\s]*)$)/im,
-                // Address: More specific - must have number at start
-                address: /^(\d{1,6}\s+[A-Z0-9\s]{3,50}(?:STREET|ST|AVENUE|AVE|ROAD|RD|DRIVE|DR|LANE|LN|BOULEVARD|BLVD|WAY|COURT|CT|PLACE|PL|CIRCLE|CIR|PARKWAY|PKWY)\b[A-Z0-9\s,#.]*)/im,
-                // License Plate: Look more specifically
-                plate: /(?:PLATE\s*(?:NUMBER|NO|#)?|TAG\s*(?:NUMBER|NO|#)?|REG(?:ISTRATION)?\s*(?:NUMBER|NO|#)?)[:\s]*([A-Z0-9]{5,8})\b/i,
-                // Standalone plate (fallback)
-                plateFallback: /\b([A-Z]{2,3}[0-9]{3,5}|[0-9]{3}[A-Z]{3}|[A-Z0-9]{6,7})\b/,
-            };
-            
             let vinFound = false;
             let nameFound = false;
             let addressFound = false;
             let plateFound = false;
             
-            // Try to extract VIN - scan all matches
-            const vinMatches = text.matchAll(patterns.vin);
-            for (const match of vinMatches) {
-                const potentialVin = match[1];
-                // Basic validation - check if it looks like a real VIN
-                if (potentialVin && potentialVin.length === 17) {
-                    document.getElementById('vin_number').value = potentialVin;
+            // Step 1: Find and extract VIN (17 characters, no I/O/Q)
+            const vinPattern = /\b([A-HJ-NPR-Z0-9]{17})\b/i;
+            for (let i = 0; i < lines.length; i++) {
+                const vinMatch = lines[i].match(vinPattern);
+                if (vinMatch) {
+                    document.getElementById('vin_number').value = vinMatch[1].toUpperCase();
                     vinFound = true;
                     fieldsFound++;
-                    console.log('VIN found:', potentialVin);
+                    console.log('VIN found:', vinMatch[1]);
                     showToast('VIN found! Decoding vehicle details...');
-                    decodeVIN(potentialVin);
-                    break; // Only use first valid VIN
+                    decodeVIN(vinMatch[1]);
+                    break;
                 }
             }
             
-            // Try to extract name - look through each line
+            // Step 2: Find license plate - look for specific keywords or common patterns
+            const platePatterns = [
+                /(?:PLATE|TAG|REG(?:ISTRATION)?)\s*(?:NUMBER|NO|#)?\s*[:\s]*([A-Z0-9]{5,8})/i,
+                /\b([A-Z]{2,3}\s*[0-9]{3,5})\b/,  // AB 12345 or ABC 123
+                /\b([0-9]{3}\s*[A-Z]{3})\b/,      // 123 ABC
+            ];
+            
+            for (let i = 0; i < lines.length; i++) {
+                for (const pattern of platePatterns) {
+                    const plateMatch = lines[i].match(pattern);
+                    if (plateMatch) {
+                        const plate = plateMatch[1].replace(/\s/g, '').toUpperCase();
+                        // Make sure it's not a VIN or too long
+                        if (plate.length >= 5 && plate.length <= 8 && plate.length !== 17) {
+                            document.getElementById('license_plate').value = plate;
+                            plateFound = true;
+                            fieldsFound++;
+                            console.log('Plate found:', plate);
+                            break;
+                        }
+                    }
+                }
+                if (plateFound) break;
+            }
+            
+            // Step 3: Find name and address in standard format
+            // Name is typically the first line with all letters (2+ words)
+            // Address is the next line starting with a number
+            
             for (let i = 0; i < lines.length; i++) {
                 const line = lines[i];
                 
-                // Skip lines that look like addresses or have numbers
-                if (/^\d+\s/.test(line)) continue;
-                if (/\b(STREET|ST|AVENUE|AVE|ROAD|RD|DRIVE|DR|LANE|LN)\b/i.test(line)) continue;
+                // Skip if this line is the VIN or plate we already found
+                if (vinFound && line.includes(document.getElementById('vin_number').value)) continue;
+                if (plateFound && line.includes(document.getElementById('license_plate').value)) continue;
                 
-                // Look for name after keyword
-                const nameMatch = line.match(/(?:NAME|OWNER|REGISTERED\s*TO|REGISTRANT)[:\s]*([A-Z][A-Z\s]{5,40})/i);
-                if (nameMatch && nameMatch[1]) {
-                    const name = nameMatch[1].trim();
-                    const cleanName = name.split(/\s+/)
-                        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-                        .join(' ');
-                    document.getElementById('customer_name').value = cleanName;
-                    nameFound = true;
-                    fieldsFound++;
-                    console.log('Name found:', cleanName);
-                    break;
-                }
-                
-                // Or look for standalone name (all caps, 2+ words)
-                if (/^[A-Z]{3,}\s+[A-Z]{2,}/.test(line) && line.length < 50) {
+                // Look for name: mostly letters, 2+ words, not too long
+                if (!nameFound && /^[A-Z][A-Z\s]{5,}$/.test(line) && line.split(/\s+/).length >= 2 && line.length < 50) {
+                    // Clean and format name
                     const cleanName = line.split(/\s+/)
                         .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
                         .join(' ');
                     document.getElementById('customer_name').value = cleanName;
                     nameFound = true;
                     fieldsFound++;
-                    console.log('Name found (standalone):', cleanName);
-                    break;
-                }
-            }
-            
-            // Try to extract address - must start with number
-            for (let i = 0; i < lines.length; i++) {
-                const line = lines[i];
-                
-                // Look for address pattern
-                if (/^\d{1,6}\s/.test(line)) {
-                    // Check if it has street suffix
-                    if (/\b(STREET|ST|AVENUE|AVE|ROAD|RD|DRIVE|DR|LANE|LN|BOULEVARD|BLVD|WAY|COURT|CT|PLACE|PL|CIRCLE|CIR)\b/i.test(line)) {
-                        // Clean up the address
-                        let address = line.replace(/\s+/g, ' ').trim();
-                        // Remove any trailing junk after common endings
-                        address = address.split(/\s{2,}/)[0]; // Take first part if multiple spaces
-                        document.getElementById('input_address').value = address;
-                        addressFound = true;
-                        fieldsFound++;
-                        console.log('Address found:', address);
-                        break;
-                    }
-                }
-            }
-            
-            // Try to extract license plate
-            const plateMatch = text.match(patterns.plate);
-            if (plateMatch && plateMatch[1]) {
-                document.getElementById('license_plate').value = plateMatch[1].replace(/\s/g, '');
-                plateFound = true;
-                fieldsFound++;
-                console.log('Plate found (keyword):', plateMatch[1]);
-            } else {
-                // Fallback: look for plate-like patterns (but avoid VIN)
-                for (let i = 0; i < lines.length; i++) {
-                    const line = lines[i];
-                    if (line.length >= 5 && line.length <= 8 && /^[A-Z0-9]+$/.test(line)) {
-                        // Make sure it's not a VIN or part of address
-                        if (line.length !== 17 && !/\d{5}/.test(line)) {
-                            document.getElementById('license_plate').value = line;
-                            plateFound = true;
+                    console.log('Name found (line ' + i + '):', cleanName);
+                    
+                    // Look for address on next few lines
+                    for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
+                        const nextLine = lines[j];
+                        // Address should start with a number
+                        if (/^\d{1,6}\s/.test(nextLine)) {
+                            document.getElementById('input_address').value = nextLine;
+                            addressFound = true;
                             fieldsFound++;
-                            console.log('Plate found (pattern):', line);
+                            console.log('Address found (line ' + j + '):', nextLine);
                             break;
                         }
                     }
+                    break; // Stop after finding name/address pair
                 }
             }
             
@@ -2237,18 +2205,17 @@
             console.log('Total fields:', fieldsFound);
             
             if (fieldsFound > 0) {
+                const foundFields = [
+                    vinFound && 'VIN',
+                    nameFound && 'Name',
+                    addressFound && 'Address',
+                    plateFound && 'Plate'
+                ].filter(Boolean);
+                
                 const message = vinFound 
-                    ? `✅ Found: ${[
-                        vinFound && 'VIN',
-                        nameFound && 'Name',
-                        addressFound && 'Address',
-                        plateFound && 'Plate'
-                    ].filter(Boolean).join(', ')}. Decoding VIN...`
-                    : `✅ Found ${fieldsFound} field(s): ${[
-                        nameFound && 'Name',
-                        addressFound && 'Address',
-                        plateFound && 'Plate'
-                    ].filter(Boolean).join(', ')}`;
+                    ? `✅ Found: ${foundFields.join(', ')}. Decoding VIN...`
+                    : `✅ Found: ${foundFields.join(', ')}`;
+                    
                 showToast(message);
                 closeRegistrationScanner();
                 
@@ -2259,7 +2226,7 @@
             } else {
                 const status = document.getElementById('registration-status');
                 status.textContent = '❌ Could not extract data. Try again with better lighting/angle.';
-                showToast('No data found. Check console for OCR text and try again.');
+                showToast('No data found. Check console (F12) for OCR text.');
             }
         }
         
