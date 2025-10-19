@@ -1046,6 +1046,9 @@
             <div class="section-content">
                 <div class="section-body">
                     <div class="form-group">
+                        <button class="form-input" style="background: linear-gradient(135deg, #9C27B0 0%, #7B1FA2 100%); color: white; font-weight: 700; cursor: pointer; border: none; box-shadow: 0 4px 16px rgba(156, 39, 176, 0.3); transition: all 0.3s; font-size: 16px;" onclick="openRegistrationScanner()" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(156, 39, 176, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 16px rgba(156, 39, 176, 0.3)'">📄 Scan Vehicle Registration</button>
+                    </div>
+                    <div class="form-group">
                         <label class="form-label">Customer Name</label>
                         <input type="text" class="form-input" id="customer_name" placeholder="Name">
                     </div>
@@ -1375,6 +1378,22 @@
         <div class="scan-status" id="plate-status">Initializing camera...</div>
         <div style="position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%); z-index: 1002;">
             <button onclick="capturePlate()" style="background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); color: white; border: none; padding: 20px 48px; font-size: 20px; font-weight: 700; border-radius: 16px; cursor: pointer; box-shadow: 0 6px 24px rgba(76, 175, 80, 0.5); min-width: 240px;">📸 Capture Plate</button>
+        </div>
+    </div>
+    
+    <!-- Registration Scanner Overlay -->
+    <div class="scanner-overlay" id="registration-scanner-overlay">
+        <div class="scanner-header">
+            <span>Scan Vehicle Registration</span>
+            <button class="close-scanner" onclick="closeRegistrationScanner()">✕</button>
+        </div>
+        <div class="scanner-video-container">
+            <video id="registration-video" autoplay playsinline></video>
+            <canvas id="registration-canvas" style="display:none;"></canvas>
+        </div>
+        <div class="scan-status" id="registration-status">Initializing camera...</div>
+        <div style="position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%); z-index: 1002;">
+            <button onclick="captureRegistration()" style="background: linear-gradient(135deg, #9C27B0 0%, #7B1FA2 100%); color: white; border: none; padding: 20px 48px; font-size: 20px; font-weight: 700; border-radius: 16px; cursor: pointer; box-shadow: 0 6px 24px rgba(156, 39, 176, 0.5); min-width: 240px;">📄 Capture Registration</button>
         </div>
     </div>
     
@@ -1993,6 +2012,192 @@
                 script.onerror = () => reject(new Error('Failed to load Tesseract.js'));
                 document.head.appendChild(script);
             });
+        }
+        
+        // Registration Scanner with OCR
+        let registrationStream = null;
+        
+        async function openRegistrationScanner() {
+            const overlay = document.getElementById('registration-scanner-overlay');
+            const video = document.getElementById('registration-video');
+            const status = document.getElementById('registration-status');
+            
+            overlay.classList.add('active');
+            status.textContent = 'Starting camera...';
+            
+            try {
+                // Request camera access with high resolution for better OCR
+                registrationStream = await navigator.mediaDevices.getUserMedia({
+                    video: { 
+                        facingMode: 'environment',
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
+                });
+                
+                video.srcObject = registrationStream;
+                status.textContent = 'Camera ready! Position registration card in view and tap "Capture Registration"';
+                
+            } catch (error) {
+                console.error('Camera error:', error);
+                status.textContent = '❌ Camera access denied or not available';
+                showToast('Camera error: ' + error.message);
+            }
+        }
+        
+        function closeRegistrationScanner() {
+            const overlay = document.getElementById('registration-scanner-overlay');
+            const video = document.getElementById('registration-video');
+            
+            // Stop camera
+            if (registrationStream) {
+                registrationStream.getTracks().forEach(track => track.stop());
+                registrationStream = null;
+            }
+            
+            video.srcObject = null;
+            overlay.classList.remove('active');
+        }
+        
+        async function captureRegistration() {
+            const video = document.getElementById('registration-video');
+            const canvas = document.getElementById('registration-canvas');
+            const status = document.getElementById('registration-status');
+            const ctx = canvas.getContext('2d');
+            
+            // Set canvas size to match video
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            // Draw current video frame to canvas
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            status.textContent = '🔍 Reading registration card...';
+            
+            try {
+                // Load Tesseract if not already loaded
+                if (typeof Tesseract === 'undefined') {
+                    status.textContent = '⚠️ Loading OCR library...';
+                    await loadTesseract();
+                }
+                
+                const { data: { text } } = await Tesseract.recognize(
+                    canvas,
+                    'eng',
+                    {
+                        logger: m => {
+                            if (m.status === 'recognizing text') {
+                                status.textContent = `Reading... ${Math.round(m.progress * 100)}%`;
+                            }
+                        }
+                    }
+                );
+                
+                // Parse the OCR text for common registration fields
+                status.textContent = '🔍 Extracting information...';
+                parseRegistrationData(text);
+                
+            } catch (error) {
+                console.error('OCR error:', error);
+                status.textContent = '❌ Error reading registration. Try manual entry.';
+                showToast('OCR error. Please try again or enter manually.');
+            }
+        }
+        
+        function parseRegistrationData(text) {
+            const lines = text.split('\n').map(line => line.trim()).filter(line => line);
+            let fieldsFound = 0;
+            
+            console.log('OCR Text:', text); // Debug
+            
+            // Common patterns for registration cards
+            const patterns = {
+                // VIN: 17 alphanumeric characters
+                vin: /\b([A-HJ-NPR-Z0-9]{17})\b/i,
+                // Name: Usually after "NAME" or "OWNER" keyword
+                name: /(?:NAME|OWNER|REGISTERED TO)[:\s]*([A-Z][A-Z\s]{2,40})/i,
+                // Address: Street number and name
+                address: /(\d+\s+[A-Z0-9\s,#.-]+(?:STREET|ST|AVENUE|AVE|ROAD|RD|DRIVE|DR|LANE|LN|BLVD|BOULEVARD|WAY|COURT|CT|PLACE|PL)[A-Z0-9\s,#.-]*)/i,
+                // License Plate: 5-8 alphanumeric
+                plate: /(?:PLATE|TAG|REGISTRATION)[:\s#]*([A-Z0-9]{5,8})\b/i,
+                // Year: 4 digits (1900-2099)
+                year: /(?:YEAR|YR)[:\s]*(19\d{2}|20\d{2})\b/i,
+                // Make: After "MAKE" keyword
+                make: /(?:MAKE)[:\s]*([A-Z][A-Z\s]{2,20})\b/i,
+                // Model: After "MODEL" keyword
+                model: /(?:MODEL)[:\s]*([A-Z0-9][A-Z0-9\s-]{1,30})\b/i,
+            };
+            
+            // Try to extract VIN
+            const vinMatch = text.match(patterns.vin);
+            if (vinMatch) {
+                document.getElementById('vin_number').value = vinMatch[1];
+                fieldsFound++;
+                // Also decode VIN to get vehicle info
+                decodeVIN(vinMatch[1]);
+            }
+            
+            // Try to extract name
+            const nameMatch = text.match(patterns.name);
+            if (nameMatch) {
+                const name = nameMatch[1].trim();
+                // Clean up name (title case)
+                const cleanName = name.split(' ')
+                    .map(word => word.charAt(0) + word.slice(1).toLowerCase())
+                    .join(' ');
+                document.getElementById('customer_name').value = cleanName;
+                fieldsFound++;
+            }
+            
+            // Try to extract address
+            const addressMatch = text.match(patterns.address);
+            if (addressMatch) {
+                document.getElementById('input_address').value = addressMatch[1].trim();
+                fieldsFound++;
+            }
+            
+            // Try to extract license plate
+            const plateMatch = text.match(patterns.plate);
+            if (plateMatch) {
+                document.getElementById('license_plate').value = plateMatch[1];
+                fieldsFound++;
+            }
+            
+            // Try to extract year (if VIN decode doesn't work)
+            const yearMatch = text.match(patterns.year);
+            if (yearMatch && !vinMatch) {
+                document.getElementById('year').value = yearMatch[1];
+                fieldsFound++;
+            }
+            
+            // Try to extract make (if VIN decode doesn't work)
+            const makeMatch = text.match(patterns.make);
+            if (makeMatch && !vinMatch) {
+                document.getElementById('make').value = makeMatch[1].trim();
+                fieldsFound++;
+            }
+            
+            // Try to extract model (if VIN decode doesn't work)
+            const modelMatch = text.match(patterns.model);
+            if (modelMatch && !vinMatch) {
+                document.getElementById('model').value = modelMatch[1].trim();
+                fieldsFound++;
+            }
+            
+            // Show results
+            if (fieldsFound > 0) {
+                showToast(`✅ Found ${fieldsFound} field(s) from registration!`);
+                closeRegistrationScanner();
+                
+                // Expand sections to show filled data
+                document.querySelectorAll('.section-card').forEach(card => {
+                    card.classList.add('expanded');
+                });
+            } else {
+                const status = document.getElementById('registration-status');
+                status.textContent = '❌ Could not extract data. Try again with better lighting/angle.';
+                showToast('No data found. Please try again or enter manually.');
+            }
         }
         
         // VIN Decoder
