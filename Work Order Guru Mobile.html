@@ -2219,7 +2219,7 @@
             
             // Step 3: Find name and address in standard format
             // Name is typically the first line with all letters (2+ words)
-            // Address is the next line starting with a number
+            // Address is the city, state, ZIP line (not street address)
             
             for (let i = 0; i < lines.length; i++) {
                 const line = lines[i];
@@ -2239,19 +2239,28 @@
                     fieldsFound++;
                     console.log('Name found (line ' + i + '):', cleanName);
                     
-                    // Look for address on next few lines
-                    for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
+                    // Look for address on next few lines - we want city, state, ZIP
+                    for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
                         const nextLine = lines[j];
-                        // Address should start with a number
-                        if (/^\d{1,6}\s/.test(nextLine)) {
-                            document.getElementById('input_address').value = nextLine;
+                        
+                        // Pattern for city, state, ZIP: "CITY, ST 12345" or "CITY ST 12345"
+                        // ZIP code is 5 digits or 5+4 format
+                        const cityStateZipPattern = /([A-Z\s]+),?\s+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)/i;
+                        const match = nextLine.match(cityStateZipPattern);
+                        
+                        if (match) {
+                            const city = match[1].trim();
+                            const state = match[2].toUpperCase();
+                            const zip = match[3];
+                            const address = `${city}, ${state} ${zip}`;
+                            document.getElementById('input_address').value = address;
                             addressFound = true;
                             fieldsFound++;
-                            console.log('Address found (line ' + j + '):', nextLine);
+                            console.log('Address found (line ' + j + '):', address);
                             break;
                         }
                     }
-                    break; // Stop after finding name/address pair
+                    break; // Stop after finding name
                 }
             }
             
