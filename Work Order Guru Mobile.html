@@ -2616,6 +2616,34 @@
             
             loadPreviousEntries();
             showToast('Welcome! 📱');
+            
+            // Back button confirmation
+            let backButtonPressed = false;
+            
+            window.addEventListener('popstate', function(event) {
+                event.preventDefault();
+                
+                if (backButtonPressed) {
+                    // User confirmed, allow exit
+                    window.history.back();
+                } else {
+                    // First press - ask for confirmation
+                    backButtonPressed = true;
+                    
+                    if (confirm('Are you sure you want to exit Work Order Guru?\n\nUnsaved changes will be lost.')) {
+                        // User confirmed exit
+                        window.history.back();
+                    } else {
+                        // User cancelled - stay in app
+                        backButtonPressed = false;
+                        // Push a new state to prevent immediate exit
+                        window.history.pushState(null, '', window.location.href);
+                    }
+                }
+            });
+            
+            // Push initial state to enable back button interception
+            window.history.pushState(null, '', window.location.href);
 
             // County autofill from ZIP in address (on input and blur)
             const countyInput = document.getElementById('input_county');
