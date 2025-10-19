@@ -2110,9 +2110,9 @@
             
             console.log('OCR Text:', text); // Debug
             
-            // Common patterns for registration cards
+            // Only extract customer info and identifiers - VIN decode will handle vehicle details
             const patterns = {
-                // VIN: 17 alphanumeric characters
+                // VIN: 17 alphanumeric characters (will trigger VIN decode)
                 vin: /\b([A-HJ-NPR-Z0-9]{17})\b/i,
                 // Name: Usually after "NAME" or "OWNER" keyword
                 name: /(?:NAME|OWNER|REGISTERED TO)[:\s]*([A-Z][A-Z\s]{2,40})/i,
@@ -2120,20 +2120,15 @@
                 address: /(\d+\s+[A-Z0-9\s,#.-]+(?:STREET|ST|AVENUE|AVE|ROAD|RD|DRIVE|DR|LANE|LN|BLVD|BOULEVARD|WAY|COURT|CT|PLACE|PL)[A-Z0-9\s,#.-]*)/i,
                 // License Plate: 5-8 alphanumeric
                 plate: /(?:PLATE|TAG|REGISTRATION)[:\s#]*([A-Z0-9]{5,8})\b/i,
-                // Year: 4 digits (1900-2099)
-                year: /(?:YEAR|YR)[:\s]*(19\d{2}|20\d{2})\b/i,
-                // Make: After "MAKE" keyword
-                make: /(?:MAKE)[:\s]*([A-Z][A-Z\s]{2,20})\b/i,
-                // Model: After "MODEL" keyword
-                model: /(?:MODEL)[:\s]*([A-Z0-9][A-Z0-9\s-]{1,30})\b/i,
             };
             
-            // Try to extract VIN
+            // Try to extract VIN - this will auto-decode and fill all vehicle info
             const vinMatch = text.match(patterns.vin);
             if (vinMatch) {
                 document.getElementById('vin_number').value = vinMatch[1];
                 fieldsFound++;
-                // Also decode VIN to get vehicle info
+                // Decode VIN to get accurate year, make, model, trim, engine size
+                showToast('VIN found! Decoding vehicle details...');
                 decodeVIN(vinMatch[1]);
             }
             
@@ -2163,30 +2158,12 @@
                 fieldsFound++;
             }
             
-            // Try to extract year (if VIN decode doesn't work)
-            const yearMatch = text.match(patterns.year);
-            if (yearMatch && !vinMatch) {
-                document.getElementById('year').value = yearMatch[1];
-                fieldsFound++;
-            }
-            
-            // Try to extract make (if VIN decode doesn't work)
-            const makeMatch = text.match(patterns.make);
-            if (makeMatch && !vinMatch) {
-                document.getElementById('make').value = makeMatch[1].trim();
-                fieldsFound++;
-            }
-            
-            // Try to extract model (if VIN decode doesn't work)
-            const modelMatch = text.match(patterns.model);
-            if (modelMatch && !vinMatch) {
-                document.getElementById('model').value = modelMatch[1].trim();
-                fieldsFound++;
-            }
-            
             // Show results
             if (fieldsFound > 0) {
-                showToast(`✅ Found ${fieldsFound} field(s) from registration!`);
+                const message = vinMatch 
+                    ? `✅ Found ${fieldsFound} field(s)! Decoding VIN for vehicle info...`
+                    : `✅ Found ${fieldsFound} field(s) from registration!`;
+                showToast(message);
                 closeRegistrationScanner();
                 
                 // Expand sections to show filled data
