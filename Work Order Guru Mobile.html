@@ -196,6 +196,7 @@
                 font-size: 16px;
                 transition: all 0.2s;
                 background: #fafafa;
+                text-transform: uppercase;
             }
             
             .form-input:focus {
@@ -626,16 +627,16 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label class="form-label">Year</label>
-                            <input type="text" class="form-input" id="year" placeholder="Year" readonly>
+                            <input type="text" class="form-input" id="year" placeholder="Year">
                         </div>
                         <div class="form-group">
                             <label class="form-label">Make</label>
-                            <input type="text" class="form-input" id="make" placeholder="Make" readonly>
+                            <input type="text" class="form-input" id="make" placeholder="Make">
                         </div>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Model</label>
-                        <input type="text" class="form-input" id="model" placeholder="Model" readonly>
+                        <input type="text" class="form-input" id="model" placeholder="Model">
                     </div>
                     <div class="form-row">
                         <div class="form-group">
@@ -772,10 +773,10 @@
             </div>
             <div class="section-content">
                 <div class="section-body">
-                    <div class="form-group">
-                        <label class="form-label">Parts & Quantities</label>
-                        <textarea class="form-input" id="parts_used" placeholder="List parts..."></textarea>
+                    <div id="parts-list">
+                        <!-- Parts will be added here dynamically -->
                     </div>
+                    <button class="form-input" style="background:#4caf50;color:white;font-weight:bold;cursor:pointer;border:none;" onclick="addPartRow()">+ Add Part</button>
                 </div>
             </div>
         </div>
@@ -1227,17 +1228,19 @@
                 ymm.textContent = `${year} ${make} ${model}`.trim();
             }
             
-            // Parts list - get from loaded data stored in window object
-            if (window.currentPartsData) {
-                for (let i = 1; i <= 17; i++) {
-                    const printQ = document.getElementById('print_q' + i);
-                    const printPN = document.getElementById('print_pn' + i);
-                    if (printQ && window.currentPartsData['q' + i]) {
-                        printQ.textContent = window.currentPartsData['q' + i];
-                    }
-                    if (printPN && window.currentPartsData['pn' + i]) {
-                        printPN.textContent = window.currentPartsData['pn' + i];
-                    }
+            // Parts list - get from current input fields
+            window.currentPartsData = getPartsData();
+            for (let i = 1; i <= 17; i++) {
+                const printQ = document.getElementById('print_q' + i);
+                const printPN = document.getElementById('print_pn' + i);
+                const qField = document.getElementById('q' + i);
+                const pnField = document.getElementById('pn' + i);
+                
+                if (printQ) {
+                    printQ.textContent = qField ? qField.value : (window.currentPartsData['q' + i] || '');
+                }
+                if (printPN) {
+                    printPN.textContent = pnField ? pnField.value : (window.currentPartsData['pn' + i] || '');
                 }
             }
             
@@ -1280,6 +1283,10 @@
             const licensePlate = getValue('license_plate');
             const servicesPerformed = getValue('services_performed');
             const techName = getValue('tech_name');
+            
+            // Get parts data
+            const partsData = getPartsData();
+            
             // Save in ORIGINAL format (all input_* fields that Work Order Guru.html uses)
             const workOrder = {
                 input_date: date,
@@ -1325,7 +1332,8 @@
                 license_plate: licensePlate,
                 services_performed: servicesPerformed,
                 tech_name: techName,
-                timestamp: new Date().toISOString()
+                timestamp: new Date().toISOString(),
+                ...partsData  // Spread parts data into the work order
             };
             database.ref('repairOrders/' + woNumber).set(workOrder)
                 .then(() => {
@@ -1365,6 +1373,9 @@
             const licensePlate = getValue('license_plate');
             const servicesPerformed = getValue('services_performed');
             const techName = getValue('tech_name');
+            
+            // Get parts data
+            const partsData = getPartsData();
             
             // Save in ORIGINAL format (all input_* fields that Work Order Guru.html uses)
             const workOrder = {
@@ -1414,7 +1425,8 @@
                 license_plate: licensePlate,
                 services_performed: servicesPerformed,
                 tech_name: techName,
-                timestamp: new Date().toISOString()
+                timestamp: new Date().toISOString(),
+                ...partsData  // Spread parts data into the work order
             };
             
             database.ref('repairOrders/' + woNumber).set(workOrder)
@@ -1427,10 +1439,83 @@
                 });
         }
         
+        // Parts Management
+        let partCounter = 0;
+        
+        function addPartRow() {
+            partCounter++;
+            if (partCounter > 17) {
+                showToast('Maximum 17 parts reached');
+                return;
+            }
+            
+            const partsList = document.getElementById('parts-list');
+            const partRow = document.createElement('div');
+            partRow.className = 'form-group';
+            partRow.style.cssText = 'border:1px solid #e0e0e0;padding:12px;border-radius:8px;margin-bottom:12px;background:#fafafa;';
+            partRow.innerHTML = `
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                    <label class="form-label" style="margin:0;">Part ${partCounter}</label>
+                    <button onclick="removePartRow(this)" style="background:#f44336;color:white;border:none;border-radius:4px;padding:4px 12px;cursor:pointer;font-size:12px;">Remove</button>
+                </div>
+                <div class="form-row">
+                    <div class="form-group" style="margin:0;">
+                        <label class="form-label" style="font-size:11px;">Qty</label>
+                        <input type="text" class="form-input part-qty" id="q${partCounter}" placeholder="Qty" data-part="${partCounter}">
+                    </div>
+                    <div class="form-group" style="margin:0;flex:2;">
+                        <label class="form-label" style="font-size:11px;">Part Number</label>
+                        <input type="text" class="form-input part-number" id="pn${partCounter}" placeholder="Part #" data-part="${partCounter}">
+                    </div>
+                </div>
+            `;
+            partsList.appendChild(partRow);
+        }
+        
+        function removePartRow(btn) {
+            btn.closest('.form-group').remove();
+        }
+        
+        function loadPartsData(data) {
+            // Clear existing parts
+            document.getElementById('parts-list').innerHTML = '';
+            partCounter = 0;
+            
+            // Load parts from data
+            for (let i = 1; i <= 17; i++) {
+                if (data['input_q' + i] || data['q' + i] || data['input_pn' + i] || data['pn' + i]) {
+                    addPartRow();
+                    const qField = document.getElementById('q' + partCounter);
+                    const pnField = document.getElementById('pn' + partCounter);
+                    if (qField) qField.value = data['input_q' + i] || data['q' + i] || '';
+                    if (pnField) pnField.value = data['input_pn' + i] || data['pn' + i] || '';
+                }
+            }
+        }
+        
+        function getPartsData() {
+            const partsData = {};
+            for (let i = 1; i <= 17; i++) {
+                const qField = document.getElementById('q' + i);
+                const pnField = document.getElementById('pn' + i);
+                if (qField && qField.value) {
+                    partsData['input_q' + i] = qField.value;
+                    partsData['q' + i] = qField.value;
+                }
+                if (pnField && pnField.value) {
+                    partsData['input_pn' + i] = pnField.value;
+                    partsData['pn' + i] = pnField.value;
+                }
+            }
+            return partsData;
+        }
+        
         // Clear Form
         function clearForm() {
             if (confirm('Clear all fields?')) {
                 document.querySelectorAll('.form-input').forEach(input => input.value = '');
+                document.getElementById('parts-list').innerHTML = '';
+                partCounter = 0;
                 // Set today's date in MM/DD/YYYY format
                 const today = new Date();
                 const month = (today.getMonth() + 1).toString().padStart(2, '0');
@@ -1538,9 +1623,12 @@
                 // Store parts data for printing (q1-q17, pn1-pn17)
                 window.currentPartsData = {};
                 for (let i = 1; i <= 17; i++) {
-                    window.currentPartsData['q' + i] = data['input_q' + i] || '';
-                    window.currentPartsData['pn' + i] = data['input_pn' + i] || '';
+                    window.currentPartsData['q' + i] = data['input_q' + i] || data['q' + i] || '';
+                    window.currentPartsData['pn' + i] = data['input_pn' + i] || data['pn' + i] || '';
                 }
+                
+                // Load parts into UI
+                loadPartsData(data);
                 
                 // Split year/make/model from original format
                 if (data.input_year_make_model_trim) {
