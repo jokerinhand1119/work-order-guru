@@ -428,17 +428,31 @@
             .print-field {
                 position: absolute;
                 font-family: Arial, sans-serif;
-                font-size: 11px;
+                font-size: 13px;
                 line-height: 1.2;
                 color: #000;
                 font-weight: bold;
                 text-align: center;
                 text-transform: uppercase;
-                overflow: visible;
+                overflow: hidden;
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 z-index: 1;
+                white-space: nowrap;
+            }
+            
+            /* Smaller font for customer info and vehicle */
+            #print_customer_name,
+            #print_address,
+            #print_year_make_model {
+                font-size: 11px;
+            }
+            
+            /* Larger font for PSI fields */
+            #print_tire_psi_front,
+            #print_tire_psi_rear {
+                font-size: 15px;
             }
             
             .print-field.multiline {
@@ -735,6 +749,37 @@
                         <label class="form-label">Old Inspection Miles</label>
                         <input type="text" class="form-input" id="old_inspection_miles" placeholder="Miles">
                     </div>
+                    
+                    <!-- Emissions Systems Checkboxes -->
+                    <div class="form-group">
+                        <label class="form-label">Emissions Systems Inspected</label>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; background: #fff; padding: 12px; border-radius: 8px; border: 2px solid #e0e0e0;">
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="chk_cat" style="width: 20px; height: 20px; cursor: pointer;">
+                                <span style="font-size: 14px; font-weight: 500;">Catalytic</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="chk_fuel_rest" style="width: 20px; height: 20px; cursor: pointer;">
+                                <span style="font-size: 14px; font-weight: 500;">Fuel Rest</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="chk_pcv" style="width: 20px; height: 20px; cursor: pointer;">
+                                <span style="font-size: 14px; font-weight: 500;">PCV</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="chk_egr" style="width: 20px; height: 20px; cursor: pointer;">
+                                <span style="font-size: 14px; font-weight: 500;">EGR</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="chk_air" style="width: 20px; height: 20px; cursor: pointer;">
+                                <span style="font-size: 14px; font-weight: 500;">Air</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="chk_evap" style="width: 20px; height: 20px; cursor: pointer;">
+                                <span style="font-size: 14px; font-weight: 500;">EVAP</span>
+                            </label>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -804,9 +849,6 @@
             </div>
         </div>
     </div>
-    
-    <!-- FAB -->
-    <button class="fab" onclick="saveWorkOrder()">💾</button>
     
     <!-- Bottom Nav -->
     <div class="bottom-nav">
@@ -1287,6 +1329,12 @@
             // Get parts data
             const partsData = getPartsData();
             
+            // Get checkbox values
+            const getCheckbox = (id) => {
+                const el = document.getElementById(id);
+                return el ? el.checked : false;
+            };
+            
             // Save in ORIGINAL format (all input_* fields that Work Order Guru.html uses)
             const workOrder = {
                 input_date: date,
@@ -1319,6 +1367,15 @@
                 input_new_state_em_date: getValue('emissions_date'),
                 input_old_s_i_exp_date: getValue('old_inspection_exp'),
                 input_old_s_i_miles: getValue('old_inspection_miles'),
+                
+                // Emissions checkboxes
+                input_chk_cat: getCheckbox('chk_cat'),
+                input_chk_fuel_rest: getCheckbox('chk_fuel_rest'),
+                input_chk_pcv: getCheckbox('chk_pcv'),
+                input_chk_egr: getCheckbox('chk_egr'),
+                input_chk_air: getCheckbox('chk_air'),
+                input_chk_evap: getCheckbox('chk_evap'),
+                
                 customer_name: customerName,
                 phone_number: phoneNumber,
                 work_order_number: woNumber,
@@ -1377,6 +1434,12 @@
             // Get parts data
             const partsData = getPartsData();
             
+            // Get checkbox values
+            const getCheckbox = (id) => {
+                const el = document.getElementById(id);
+                return el ? el.checked : false;
+            };
+            
             // Save in ORIGINAL format (all input_* fields that Work Order Guru.html uses)
             const workOrder = {
                 // Original format fields
@@ -1410,6 +1473,14 @@
                 input_new_state_em_date: getValue('emissions_date'),
                 input_old_s_i_exp_date: getValue('old_inspection_exp'),
                 input_old_s_i_miles: getValue('old_inspection_miles'),
+                
+                // Emissions checkboxes
+                input_chk_cat: getCheckbox('chk_cat'),
+                input_chk_fuel_rest: getCheckbox('chk_fuel_rest'),
+                input_chk_pcv: getCheckbox('chk_pcv'),
+                input_chk_egr: getCheckbox('chk_egr'),
+                input_chk_air: getCheckbox('chk_air'),
+                input_chk_evap: getCheckbox('chk_evap'),
                 
                 // Mobile format (for mobile app to read)
                 customer_name: customerName,
@@ -1514,6 +1585,7 @@
         function clearForm() {
             if (confirm('Clear all fields?')) {
                 document.querySelectorAll('.form-input').forEach(input => input.value = '');
+                document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
                 document.getElementById('parts-list').innerHTML = '';
                 partCounter = 0;
                 // Set today's date in MM/DD/YYYY format
@@ -1565,8 +1637,6 @@
                         
                         console.log(`Entry ${index + 1}: ${option.textContent}`);
                     });
-                    
-                    showToast(`Loaded ${entries.length} entries`);
                 });
             } catch (error) {
                 console.error('Error loading entries:', error);
@@ -1620,6 +1690,18 @@
                 setValue('old_inspection_exp', data.input_old_s_i_exp_date);
                 setValue('old_inspection_miles', data.input_old_s_i_miles);
                 
+                // Load checkboxes
+                const setCheckbox = (id, value) => {
+                    const el = document.getElementById(id);
+                    if (el) el.checked = value || false;
+                };
+                setCheckbox('chk_cat', data.input_chk_cat);
+                setCheckbox('chk_fuel_rest', data.input_chk_fuel_rest);
+                setCheckbox('chk_pcv', data.input_chk_pcv);
+                setCheckbox('chk_egr', data.input_chk_egr);
+                setCheckbox('chk_air', data.input_chk_air);
+                setCheckbox('chk_evap', data.input_chk_evap);
+                
                 // Store parts data for printing (q1-q17, pn1-pn17)
                 window.currentPartsData = {};
                 for (let i = 1; i <= 17; i++) {
@@ -1671,7 +1753,7 @@
             document.getElementById('date').value = `${month}/${day}/${year}`;
             
             loadPreviousEntries();
-            showToast('Welcome! 📱 (Script running)');
+            showToast('Welcome! 📱');
 
             // County autofill from ZIP in address (on input and blur)
             const countyInput = document.getElementById('input_county');
