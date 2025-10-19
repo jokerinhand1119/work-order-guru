@@ -2,37 +2,62 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, maximum-scale=3.0">
+    <meta na        /* F        #entries-dropdown {
+            width: 100%;
+            max-width: 850px;
+            margin: 0 auto 10px auto;
+            padding: 10px;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            position: static;
+            z-index: 99;
+            margin-bottom: 16px;
+        }
+        
+        /* Improved dropdown option styling - Dark Mode */
+        #entries-dropdown option {
+            padding: 6px 4px;
+            line-height: 1.4;
+            white-space: normal;
+            text-transform: uppercase;
+            background: #2d2d2d !important;
+            color: #ffffff !important;
+        }
+        
+        #entries-dropdown option:not(:first-child) {
+            border-top: 1px solid #404040;
+        }
+        
+        #entries-dropdown option:hover {
+            background: #404040 !important;
+        }
+        
+        #entries-dropdown option:selected {
+            background: #555 !important;
+        }tyles --- */
+        #repair-order-form { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .form-field { 
+            position: absolute; 
+            z-index: 2; 
+            box-sizing: border-box;
+            /* Force hardware acceleration and proper rendering on Android */
+            -webkit-transform: translateZ(0);
+            transform: translateZ(0);
+            -webkit-backface-visibility: hidden;
+            backface-visibility: hidden;
+            /* Ensure proper pointer events */
+            pointer-events: auto;
+        }wport" content="width=device-width, initial-scale=1.0, user-scalable=yes, maximum-scale=3.0">
     <title>Work Order Guru</title>
     
     <!-- Favicon -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🧙‍♂️</text></svg>">
-    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🧙‍♂️</text></svg>">
-    <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiV29yayBPcmRlciBHdXJ1Iiwic2hvcnRfbmFtZSI6Ikd1cnUiLCJzdGFydF91cmwiOiIuIiwiZGlzcGxheSI6InN0YW5kYWxvbmUiLCJiYWNrZ3JvdW5kX2NvbG9yIjoiI2ZmZmZmZiIsInRoZW1lX2NvbG9yIjoiIzQwNWNmZiIsImljb25zIjpbeyJzcmMiOiJkYXRhOmltYWdlL3N2Zyt4bWwsPHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAxMDAgMTAwJz48dGV4dCB5PScwLjllbScgZm9udC1zaXplPSc5MCc+8J+ngOKAjeKZgu+4jzwvdGV4dD48L3N2Zz4iLCJzaXplcyI6ImFueSIsInR5cGUiOiJpbWFnZS9zdmcreG1sIn1dfQ==">
-    <meta name="theme-color" content="#405cff">
     
     <!-- Barcode Scanner Library for Camera-based VIN scanning -->
     <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
     
     <style>
-        body { font-family: sans-serif; background-color: #333; margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding-top: 30px; box-sizing: border-box; }
-        .container { 
-            position: relative; 
-            width: 850px; 
-            height: 1100px; 
-            margin: auto;
-            /* Force hardware acceleration on Android */
-            -webkit-transform: translateZ(0);
-            transform: translateZ(0);
-            -webkit-backface-visibility: hidden;
-            backface-visibility: hidden;
-        }
-        
-        /* Android-specific fixes */
-        @media (max-width: 900px) {
-            body { 
-                padding-top: 10px;
-                /* Fix Android viewport issues */
         body { font-family: sans-serif; background-color: #333; margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding-top: 30px; box-sizing: border-box; }
         .container { 
             position: relative; 
@@ -1746,18 +1771,6 @@
             setupTireTreadAutoFormat();
             setupBrakeAutoFormat();
             optimizeForAndroid();
-            
-            // Register service worker for PWA functionality
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('./sw.js')
-                    .then(function(registration) {
-                        console.log('✅ Service Worker registered! PWA install option should appear in Edge.');
-                        console.log('Look for the "App available" or install icon in the address bar!');
-                    })
-                    .catch(function(err) {
-                        console.log('Service Worker registration failed:', err);
-                    });
-            }
         });
         
         // Android-specific optimizations (doesn't affect desktop)
