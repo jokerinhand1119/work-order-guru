@@ -1468,6 +1468,9 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     
     <script>
+        // ===== FEATURE TOGGLES =====
+        const PART_SCANNER_ENABLED = true; // Set to false to disable part barcode scanner
+        
         // Global variables
         let database;
         
@@ -1595,6 +1598,7 @@
         
         function closeScanner() {
             scannerActive = false;
+            partScannerActive = false;
             document.getElementById('scanner-overlay').classList.remove('active');
             if (videoStream) {
                 videoStream.getTracks().forEach(track => track.stop());
@@ -1844,6 +1848,188 @@
         // County Lookup
         async function lookupCounty(vin) {
             // No longer used for VIN, replaced by ZIP lookup on address
+        }
+        
+        // ===== PART BARCODE SCANNER =====
+        let currentPartIndex = null;
+        let partScannerActive = false;
+        
+        async function scanPartBarcode(partIndex) {
+            if (!PART_SCANNER_ENABLED) {
+                showToast('Part scanner is disabled');
+                return;
+            }
+            
+            currentPartIndex = partIndex;
+            const overlay = document.getElementById('scanner-overlay');
+            overlay.classList.add('active');
+            partScannerActive = true;
+            
+            const container = document.getElementById('scanner-video');
+            container.innerHTML = '';
+            
+            const video = document.createElement('video');
+            video.setAttribute('playsinline', '');
+            video.setAttribute('autoplay', '');
+            container.appendChild(video);
+            
+            try {
+                const isAndroid = /Android/i.test(navigator.userAgent);
+                videoStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'environment',
+                        width: { ideal: isAndroid ? 1280 : 1920 },
+                        height: { ideal: isAndroid ? 720 : 1080 }
+                    }
+                });
+                
+                video.srcObject = videoStream;
+                await video.play();
+                
+                if ('BarcodeDetector' in window) {
+                    startPartBarcodeScanning(video);
+                } else {
+                    showToast('Barcode scanner not supported on this device');
+                    closeScanner();
+                }
+            } catch (err) {
+                showToast('Camera access denied');
+                closeScanner();
+            }
+        }
+        
+        async function startPartBarcodeScanning(video) {
+            const barcodeDetector = new BarcodeDetector({ 
+                formats: ['upc_a', 'upc_e', 'ean_13', 'ean_8', 'code_128', 'code_39', 'itf', 'qr_code'] 
+            });
+            const scanStatus = document.getElementById('scan-status');
+            scanStatus.textContent = 'Scan part barcode...';
+            
+            scanningInterval = setInterval(async () => {
+                if (!partScannerActive) return;
+                
+                try {
+                    const barcodes = await barcodeDetector.detect(video);
+                    if (barcodes.length > 0) {
+                        const barcode = barcodes[0].rawValue;
+                        scanStatus.textContent = '✓ Barcode Found!';
+                        closeScanner();
+                        partScannerActive = false;
+                        
+                        // Look up part data
+                        await lookupPartBarcode(barcode, currentPartIndex);
+                        return;
+                    }
+                } catch (err) {
+                    console.error('Scan error:', err);
+                }
+            }, 100);
+        }
+        
+        async function lookupPartBarcode(barcode, partIndex) {
+            showToast('Looking up part...');
+            
+            try {
+                // Tier 1: Check Firebase cache first
+                const cachedPart = await checkPartCache(barcode);
+                if (cachedPart) {
+                    fillPartData(partIndex, cachedPart);
+                    showToast('Part loaded from database!');
+                    return;
+                }
+                
+                // Tier 2: Try UPCitemdb API
+                const apiPart = await lookupUPCitemdb(barcode);
+                if (apiPart) {
+                    fillPartData(partIndex, apiPart);
+                    // Cache for future use
+                    savePartToCache(barcode, apiPart);
+                    showToast('Part found!');
+                    return;
+                }
+                
+                // Tier 3: Fallback - use barcode as part number
+                fillPartData(partIndex, {
+                    partNumber: barcode,
+                    description: '' // User can fill in
+                });
+                showToast('Barcode scanned - enter description');
+                
+            } catch (error) {
+                console.error('Part lookup error:', error);
+                // Still fill in the barcode
+                fillPartData(partIndex, {
+                    partNumber: barcode,
+                    description: ''
+                });
+                showToast('Lookup failed - barcode saved');
+            }
+        }
+        
+        async function checkPartCache(barcode) {
+            try {
+                const snapshot = await database.ref('partDatabase/' + barcode).once('value');
+                return snapshot.val();
+            } catch (error) {
+                console.error('Cache check error:', error);
+                return null;
+            }
+        }
+        
+        async function lookupUPCitemdb(barcode) {
+            try {
+                // Free trial API - 100 requests per day
+                const response = await fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${barcode}`);
+                const data = await response.json();
+                
+                if (data.code === 'OK' && data.items && data.items.length > 0) {
+                    const item = data.items[0];
+                    return {
+                        partNumber: item.model || item.ean || barcode,
+                        description: item.title || item.description || '',
+                        brand: item.brand || '',
+                        category: item.category || ''
+                    };
+                }
+                return null;
+            } catch (error) {
+                console.error('UPCitemdb error:', error);
+                return null;
+            }
+        }
+        
+        function fillPartData(partIndex, partData) {
+            const pnField = document.getElementById('pn' + partIndex);
+            if (pnField) {
+                // Format: "PART# - Description" or just "PART#" if no description
+                let partText = partData.partNumber || '';
+                if (partData.description) {
+                    partText += ' - ' + partData.description;
+                }
+                if (partData.brand && !partText.includes(partData.brand)) {
+                    partText = partData.brand + ' ' + partText;
+                }
+                pnField.value = partText.toUpperCase();
+            }
+            
+            // Set default quantity to 1 if empty
+            const qField = document.getElementById('q' + partIndex);
+            if (qField && !qField.value) {
+                qField.value = '1';
+            }
+        }
+        
+        async function savePartToCache(barcode, partData) {
+            try {
+                await database.ref('partDatabase/' + barcode).set({
+                    ...partData,
+                    barcode: barcode,
+                    cachedDate: new Date().toISOString()
+                });
+                console.log('Part cached:', barcode);
+            } catch (error) {
+                console.error('Cache save error:', error);
+            }
         }
         
         // VIN field auto-decode
@@ -2174,6 +2360,12 @@
             const partRow = document.createElement('div');
             partRow.className = 'form-group';
             partRow.style.cssText = 'border:1px solid #e0e0e0;padding:12px;border-radius:8px;margin-bottom:12px;background:#fafafa;';
+            
+            // Camera button HTML (only if enabled)
+            const cameraButton = PART_SCANNER_ENABLED ? 
+                `<button onclick="scanPartBarcode(${partCounter})" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);width:44px;height:44px;background:linear-gradient(135deg, #00ff88 0%, #00cc6a 100%);border-radius:12px;border:none;color:white;font-size:22px;cursor:pointer;box-shadow:0 4px 12px rgba(0, 255, 136, 0.4);transition:all 0.3s;" title="Scan Barcode">📷</button>` 
+                : '';
+            
             partRow.innerHTML = `
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
                     <label class="form-label" style="margin:0;">Part ${partCounter}</label>
@@ -2184,9 +2376,10 @@
                         <label class="form-label" style="font-size:11px;">Qty</label>
                         <input type="text" class="form-input part-qty" id="q${partCounter}" placeholder="Qty" data-part="${partCounter}">
                     </div>
-                    <div class="form-group" style="margin:0;flex:2;">
+                    <div class="form-group" style="margin:0;flex:2;position:relative;">
                         <label class="form-label" style="font-size:11px;">Part Number</label>
-                        <input type="text" class="form-input part-number" id="pn${partCounter}" placeholder="Part #" data-part="${partCounter}">
+                        <input type="text" class="form-input part-number ${PART_SCANNER_ENABLED ? 'has-icon' : ''}" id="pn${partCounter}" placeholder="Part #" data-part="${partCounter}">
+                        ${cameraButton}
                     </div>
                 </div>
             `;
