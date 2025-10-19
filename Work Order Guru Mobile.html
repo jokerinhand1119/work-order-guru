@@ -1097,6 +1097,9 @@
                     <div class="form-group">
                         <button class="form-input" style="background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%); color: white; font-weight: 700; cursor: pointer; border: none; box-shadow: 0 4px 16px rgba(255, 152, 0, 0.3); transition: all 0.3s; font-size: 16px;" onclick="checkRecalls()" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(255, 152, 0, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 16px rgba(255, 152, 0, 0.3)'">⚠️ Check for Recalls</button>
                     </div>
+                    <div class="form-group">
+                        <button class="form-input" style="background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%); color: white; font-weight: 700; cursor: pointer; border: none; box-shadow: 0 4px 16px rgba(33, 150, 243, 0.3); transition: all 0.3s; font-size: 16px;" onclick="openIDENTIFIX()" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(33, 150, 243, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 16px rgba(33, 150, 243, 0.3)'">🔧 Lookup in IDENTIFIX</button>
+                    </div>
                     <div class="form-row">
                         <div class="form-group">
                             <label class="form-label">Year</label>
@@ -1823,6 +1826,34 @@
             setTimeout(() => {
                 printWindow.print();
             }, 250);
+        }
+        
+        // Open IDENTIFIX with VIN
+        function openIDENTIFIX() {
+            const vin = document.getElementById('vin_number').value.trim();
+            const year = document.getElementById('year').value.trim();
+            const make = document.getElementById('make').value.trim();
+            const model = document.getElementById('model').value.trim();
+            
+            // IDENTIFIX Direct URL - adjust based on your subscription type
+            // This is the standard web login URL - may need adjustment for your specific IDENTIFIX portal
+            let identifixURL = 'https://www.identifix.com/';
+            
+            // If VIN is available, add it as a search parameter (some IDENTIFIX portals support this)
+            if (vin && vin.length === 17) {
+                // Try direct VIN search - URL structure may vary by IDENTIFIX version
+                identifixURL = `https://www.identifix.com/search?vin=${encodeURIComponent(vin)}`;
+                showToast('Opening IDENTIFIX with VIN...');
+            } else if (year && make && model) {
+                // If no VIN, try vehicle search
+                identifixURL = `https://www.identifix.com/search?year=${encodeURIComponent(year)}&make=${encodeURIComponent(make)}&model=${encodeURIComponent(model)}`;
+                showToast('Opening IDENTIFIX with vehicle info...');
+            } else {
+                showToast('Opening IDENTIFIX... (Add VIN or vehicle info for auto-search)');
+            }
+            
+            // Open in new tab
+            window.open(identifixURL, '_blank');
         }
         
         // VIN Decoder
