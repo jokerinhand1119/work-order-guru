@@ -2108,61 +2108,147 @@
             const lines = text.split('\n').map(line => line.trim()).filter(line => line);
             let fieldsFound = 0;
             
-            console.log('OCR Text:', text); // Debug
+            console.log('=== OCR Full Text ===');
+            console.log(text);
+            console.log('=== OCR Lines ===');
+            lines.forEach((line, i) => console.log(`Line ${i}: "${line}"`));
             
-            // Only extract customer info and identifiers - VIN decode will handle vehicle details
+            // Improved patterns for registration cards
             const patterns = {
-                // VIN: 17 alphanumeric characters (will trigger VIN decode)
-                vin: /\b([A-HJ-NPR-Z0-9]{17})\b/i,
-                // Name: Usually after "NAME" or "OWNER" keyword
-                name: /(?:NAME|OWNER|REGISTERED TO)[:\s]*([A-Z][A-Z\s]{2,40})/i,
-                // Address: Street number and name
-                address: /(\d+\s+[A-Z0-9\s,#.-]+(?:STREET|ST|AVENUE|AVE|ROAD|RD|DRIVE|DR|LANE|LN|BLVD|BOULEVARD|WAY|COURT|CT|PLACE|PL)[A-Z0-9\s,#.-]*)/i,
-                // License Plate: 5-8 alphanumeric
-                plate: /(?:PLATE|TAG|REGISTRATION)[:\s#]*([A-Z0-9]{5,8})\b/i,
+                // VIN: 17 alphanumeric characters (excluding I, O, Q)
+                vin: /\b([A-HJ-NPR-Z0-9]{17})\b/gi,
+                // Name: Look for common name patterns - usually ALL CAPS on registration
+                name: /(?:(?:NAME|OWNER|REGISTERED\s*TO|REGISTRANT)[:\s]*([A-Z]{3,}\s+[A-Z]{2,}[A-Z\s]*)|^([A-Z]{3,}\s+[A-Z]{2,}[A-Z\s]*)$)/im,
+                // Address: More specific - must have number at start
+                address: /^(\d{1,6}\s+[A-Z0-9\s]{3,50}(?:STREET|ST|AVENUE|AVE|ROAD|RD|DRIVE|DR|LANE|LN|BOULEVARD|BLVD|WAY|COURT|CT|PLACE|PL|CIRCLE|CIR|PARKWAY|PKWY)\b[A-Z0-9\s,#.]*)/im,
+                // License Plate: Look more specifically
+                plate: /(?:PLATE\s*(?:NUMBER|NO|#)?|TAG\s*(?:NUMBER|NO|#)?|REG(?:ISTRATION)?\s*(?:NUMBER|NO|#)?)[:\s]*([A-Z0-9]{5,8})\b/i,
+                // Standalone plate (fallback)
+                plateFallback: /\b([A-Z]{2,3}[0-9]{3,5}|[0-9]{3}[A-Z]{3}|[A-Z0-9]{6,7})\b/,
             };
             
-            // Try to extract VIN - this will auto-decode and fill all vehicle info
-            const vinMatch = text.match(patterns.vin);
-            if (vinMatch) {
-                document.getElementById('vin_number').value = vinMatch[1];
-                fieldsFound++;
-                // Decode VIN to get accurate year, make, model, trim, engine size
-                showToast('VIN found! Decoding vehicle details...');
-                decodeVIN(vinMatch[1]);
+            let vinFound = false;
+            let nameFound = false;
+            let addressFound = false;
+            let plateFound = false;
+            
+            // Try to extract VIN - scan all matches
+            const vinMatches = text.matchAll(patterns.vin);
+            for (const match of vinMatches) {
+                const potentialVin = match[1];
+                // Basic validation - check if it looks like a real VIN
+                if (potentialVin && potentialVin.length === 17) {
+                    document.getElementById('vin_number').value = potentialVin;
+                    vinFound = true;
+                    fieldsFound++;
+                    console.log('VIN found:', potentialVin);
+                    showToast('VIN found! Decoding vehicle details...');
+                    decodeVIN(potentialVin);
+                    break; // Only use first valid VIN
+                }
             }
             
-            // Try to extract name
-            const nameMatch = text.match(patterns.name);
-            if (nameMatch) {
-                const name = nameMatch[1].trim();
-                // Clean up name (title case)
-                const cleanName = name.split(' ')
-                    .map(word => word.charAt(0) + word.slice(1).toLowerCase())
-                    .join(' ');
-                document.getElementById('customer_name').value = cleanName;
-                fieldsFound++;
+            // Try to extract name - look through each line
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                
+                // Skip lines that look like addresses or have numbers
+                if (/^\d+\s/.test(line)) continue;
+                if (/\b(STREET|ST|AVENUE|AVE|ROAD|RD|DRIVE|DR|LANE|LN)\b/i.test(line)) continue;
+                
+                // Look for name after keyword
+                const nameMatch = line.match(/(?:NAME|OWNER|REGISTERED\s*TO|REGISTRANT)[:\s]*([A-Z][A-Z\s]{5,40})/i);
+                if (nameMatch && nameMatch[1]) {
+                    const name = nameMatch[1].trim();
+                    const cleanName = name.split(/\s+/)
+                        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+                        .join(' ');
+                    document.getElementById('customer_name').value = cleanName;
+                    nameFound = true;
+                    fieldsFound++;
+                    console.log('Name found:', cleanName);
+                    break;
+                }
+                
+                // Or look for standalone name (all caps, 2+ words)
+                if (/^[A-Z]{3,}\s+[A-Z]{2,}/.test(line) && line.length < 50) {
+                    const cleanName = line.split(/\s+/)
+                        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+                        .join(' ');
+                    document.getElementById('customer_name').value = cleanName;
+                    nameFound = true;
+                    fieldsFound++;
+                    console.log('Name found (standalone):', cleanName);
+                    break;
+                }
             }
             
-            // Try to extract address
-            const addressMatch = text.match(patterns.address);
-            if (addressMatch) {
-                document.getElementById('input_address').value = addressMatch[1].trim();
-                fieldsFound++;
+            // Try to extract address - must start with number
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                
+                // Look for address pattern
+                if (/^\d{1,6}\s/.test(line)) {
+                    // Check if it has street suffix
+                    if (/\b(STREET|ST|AVENUE|AVE|ROAD|RD|DRIVE|DR|LANE|LN|BOULEVARD|BLVD|WAY|COURT|CT|PLACE|PL|CIRCLE|CIR)\b/i.test(line)) {
+                        // Clean up the address
+                        let address = line.replace(/\s+/g, ' ').trim();
+                        // Remove any trailing junk after common endings
+                        address = address.split(/\s{2,}/)[0]; // Take first part if multiple spaces
+                        document.getElementById('input_address').value = address;
+                        addressFound = true;
+                        fieldsFound++;
+                        console.log('Address found:', address);
+                        break;
+                    }
+                }
             }
             
             // Try to extract license plate
             const plateMatch = text.match(patterns.plate);
-            if (plateMatch) {
-                document.getElementById('license_plate').value = plateMatch[1];
+            if (plateMatch && plateMatch[1]) {
+                document.getElementById('license_plate').value = plateMatch[1].replace(/\s/g, '');
+                plateFound = true;
                 fieldsFound++;
+                console.log('Plate found (keyword):', plateMatch[1]);
+            } else {
+                // Fallback: look for plate-like patterns (but avoid VIN)
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i];
+                    if (line.length >= 5 && line.length <= 8 && /^[A-Z0-9]+$/.test(line)) {
+                        // Make sure it's not a VIN or part of address
+                        if (line.length !== 17 && !/\d{5}/.test(line)) {
+                            document.getElementById('license_plate').value = line;
+                            plateFound = true;
+                            fieldsFound++;
+                            console.log('Plate found (pattern):', line);
+                            break;
+                        }
+                    }
+                }
             }
             
-            // Show results
+            // Show detailed results
+            console.log('=== Extraction Results ===');
+            console.log('VIN:', vinFound);
+            console.log('Name:', nameFound);
+            console.log('Address:', addressFound);
+            console.log('Plate:', plateFound);
+            console.log('Total fields:', fieldsFound);
+            
             if (fieldsFound > 0) {
-                const message = vinMatch 
-                    ? `✅ Found ${fieldsFound} field(s)! Decoding VIN for vehicle info...`
-                    : `✅ Found ${fieldsFound} field(s) from registration!`;
+                const message = vinFound 
+                    ? `✅ Found: ${[
+                        vinFound && 'VIN',
+                        nameFound && 'Name',
+                        addressFound && 'Address',
+                        plateFound && 'Plate'
+                    ].filter(Boolean).join(', ')}. Decoding VIN...`
+                    : `✅ Found ${fieldsFound} field(s): ${[
+                        nameFound && 'Name',
+                        addressFound && 'Address',
+                        plateFound && 'Plate'
+                    ].filter(Boolean).join(', ')}`;
                 showToast(message);
                 closeRegistrationScanner();
                 
@@ -2173,7 +2259,7 @@
             } else {
                 const status = document.getElementById('registration-status');
                 status.textContent = '❌ Could not extract data. Try again with better lighting/angle.';
-                showToast('No data found. Please try again or enter manually.');
+                showToast('No data found. Check console for OCR text and try again.');
             }
         }
         
