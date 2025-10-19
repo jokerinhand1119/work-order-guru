@@ -1122,7 +1122,10 @@
                     </div>
                     <div class="form-group">
                         <label class="form-label">License Plate</label>
-                        <input type="text" class="form-input" id="license_plate" placeholder="Plate">
+                        <div class="form-input-group">
+                            <input type="text" class="form-input has-icon" id="license_plate" placeholder="Plate">
+                            <button class="input-icon" onclick="openPlateScanner()">📷</button>
+                        </div>
                     </div>
                     <div class="form-row-2">
                         <div class="form-group">
@@ -1356,6 +1359,22 @@
                 <button class="recall-btn recall-btn-print" onclick="printRecalls()">🖨️ Print Recalls</button>
                 <button class="recall-btn recall-btn-close" onclick="closeRecallModal()">Close</button>
             </div>
+        </div>
+    </div>
+    
+    <!-- License Plate Scanner Overlay -->
+    <div class="scanner-overlay" id="plate-scanner-overlay">
+        <div class="scanner-header">
+            <span>Scan License Plate</span>
+            <button class="close-scanner" onclick="closePlateScanner()">✕</button>
+        </div>
+        <div class="scanner-video-container">
+            <video id="plate-video" autoplay playsinline></video>
+            <canvas id="plate-canvas" style="display:none;"></canvas>
+        </div>
+        <div class="scan-status" id="plate-status">Initializing camera...</div>
+        <div style="text-align: center; margin-top: 16px;">
+            <button onclick="capturePlate()" style="background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); color: white; border: none; padding: 16px 32px; font-size: 18px; font-weight: 700; border-radius: 12px; cursor: pointer; box-shadow: 0 4px 16px rgba(76, 175, 80, 0.4);">📸 Capture Plate</button>
         </div>
     </div>
     
@@ -1848,6 +1867,132 @@
             } else {
                 showToast('Opening IDENTIFIX login...');
             }
+        }
+        
+        // License Plate Scanner with OCR
+        let plateStream = null;
+        
+        async function openPlateScanner() {
+            const overlay = document.getElementById('plate-scanner-overlay');
+            const video = document.getElementById('plate-video');
+            const status = document.getElementById('plate-status');
+            
+            overlay.classList.add('active');
+            status.textContent = 'Starting camera...';
+            
+            try {
+                // Request camera access
+                plateStream = await navigator.mediaDevices.getUserMedia({
+                    video: { 
+                        facingMode: 'environment',
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
+                });
+                
+                video.srcObject = plateStream;
+                status.textContent = 'Camera ready! Position license plate in view and tap "Capture Plate"';
+                
+            } catch (error) {
+                console.error('Camera error:', error);
+                status.textContent = '❌ Camera access denied or not available';
+                showToast('Camera error: ' + error.message);
+            }
+        }
+        
+        function closePlateScanner() {
+            const overlay = document.getElementById('plate-scanner-overlay');
+            const video = document.getElementById('plate-video');
+            
+            // Stop camera
+            if (plateStream) {
+                plateStream.getTracks().forEach(track => track.stop());
+                plateStream = null;
+            }
+            
+            video.srcObject = null;
+            overlay.classList.remove('active');
+        }
+        
+        async function capturePlate() {
+            const video = document.getElementById('plate-video');
+            const canvas = document.getElementById('plate-canvas');
+            const status = document.getElementById('plate-status');
+            const ctx = canvas.getContext('2d');
+            
+            // Set canvas size to match video
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            // Draw current video frame to canvas
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            status.textContent = '🔍 Reading license plate...';
+            
+            try {
+                // Use Tesseract.js for OCR
+                // First, check if Tesseract is available
+                if (typeof Tesseract === 'undefined') {
+                    // Fallback: Manual text extraction using native OCR if available
+                    status.textContent = '⚠️ Loading OCR library...';
+                    
+                    // Load Tesseract.js dynamically
+                    await loadTesseract();
+                }
+                
+                const { data: { text } } = await Tesseract.recognize(
+                    canvas,
+                    'eng',
+                    {
+                        logger: m => {
+                            if (m.status === 'recognizing text') {
+                                status.textContent = `Reading... ${Math.round(m.progress * 100)}%`;
+                            }
+                        }
+                    }
+                );
+                
+                // Clean up the recognized text (remove spaces, special chars, keep only alphanumeric)
+                let plate = text.toUpperCase()
+                    .replace(/[^A-Z0-9]/g, '')
+                    .trim();
+                
+                // Try to find a valid plate pattern (typically 5-8 characters)
+                const plateMatch = text.match(/[A-Z0-9]{5,8}/i);
+                if (plateMatch) {
+                    plate = plateMatch[0].toUpperCase();
+                }
+                
+                if (plate && plate.length >= 4) {
+                    document.getElementById('license_plate').value = plate;
+                    showToast(`✅ Plate detected: ${plate}`);
+                    closePlateScanner();
+                } else {
+                    status.textContent = '❌ No plate detected. Try again with better lighting/angle.';
+                    showToast('Could not read plate. Please try again.');
+                }
+                
+            } catch (error) {
+                console.error('OCR error:', error);
+                status.textContent = '❌ Error reading plate. Try manual entry.';
+                showToast('OCR error. Please enter plate manually.');
+            }
+        }
+        
+        // Load Tesseract.js library dynamically
+        function loadTesseract() {
+            return new Promise((resolve, reject) => {
+                if (typeof Tesseract !== 'undefined') {
+                    resolve();
+                    return;
+                }
+                
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js';
+                script.onload = () => resolve();
+                script.onerror = () => reject(new Error('Failed to load Tesseract.js'));
+                document.head.appendChild(script);
+            });
         }
         
         // VIN Decoder
