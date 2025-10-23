@@ -2237,6 +2237,12 @@
 
             const zip = zipMatch[1]; // Extract 5-digit ZIP
             console.log('Extracted 5-digit ZIP:', zip);
+            
+            // Check if we already looked up this ZIP
+            if (zip === lastZipUsedForCounty) {
+                console.log('County already filled for this ZIP, skipping lookup');
+                return;
+            }
 
             try {
                 console.log('Fetching coordinates from zippopotam.us...');
@@ -2276,8 +2282,10 @@
                             if (countyField) {
                                 if (!countyField.value.trim()) {
                                     countyField.value = countyName.toUpperCase();
+                                    lastZipUsedForCounty = zip; // Track this ZIP
                                     console.log(`✓ SUCCESS: County filled with: ${countyName.toUpperCase()}`);
                                 } else {
+                                    lastZipUsedForCounty = zip; // Track even if already filled
                                     console.log(`County field already has value: ${countyField.value}`);
                                 }
                             } else {
@@ -2358,6 +2366,10 @@ const deleteEntryBtn = document.getElementById('delete-entry-btn');
 const newOrderBtn = document.getElementById('new-order-btn');
 let entriesCache = {};
 let currentEditKey = null;
+let currentWorkOrderNumber = null; // Track work order number for persistent updates
+let lastZipUsedForCounty = ''; // Track ZIP code for smart county updates
+let currentWorkOrderListener = null; // Firebase listener for current work order
+let lastKnownTimestamp = null; // Track last timestamp to detect updates
 
 // Auto-fill date field with current date on page load
 function setCurrentDate() {
@@ -2371,8 +2383,138 @@ function setCurrentDate() {
     }
 }
 
+// Track field changes for smart merging
+// Real-time sync - watch for updates to current work order
+function startWatchingWorkOrder(workOrderNumber) {
+    // Stop any existing listener first
+    stopWatchingWorkOrder();
+    
+    if (!workOrderNumber) return;
+    
+    console.log('Starting real-time sync for work order:', workOrderNumber);
+    
+    // Listen for changes to this specific work order
+    currentWorkOrderListener = db.ref('repairOrders/' + workOrderNumber).on('value', function(snapshot) {
+        const updatedData = snapshot.val();
+        
+        if (!updatedData) return;
+        
+        // Always update the timestamp for future comparisons
+        if (!lastKnownTimestamp) {
+            lastKnownTimestamp = updatedData.timestamp;
+        }
+    });
+}
+
+function stopWatchingWorkOrder() {
+    if (currentWorkOrderListener) {
+        const woNumber = currentWorkOrderNumber;
+        if (woNumber) {
+            db.ref('repairOrders/' + woNumber).off('value', currentWorkOrderListener);
+            console.log('Stopped watching work order:', woNumber);
+        }
+        currentWorkOrderListener = null;
+    }
+    lastKnownTimestamp = null;
+}
+
+// Helper function to load work order data into form
+function loadWorkOrderData(entry) {
+    if (!entry) return;
+    
+    console.log('Loading work order data...');
+    
+    // Clear form first
+    document.getElementById('repair-order-form').reset();
+    clearPartsFields();
+    
+    // Populate form fields
+    const form = document.getElementById('repair-order-form');
+    form.querySelectorAll('input[type="text"], textarea, input[type="hidden"]').forEach(function(el) {
+        if (entry[el.name] !== undefined) el.value = entry[el.name];
+    });
+    
+    // Populate checkboxes
+    form.querySelectorAll('input[type="checkbox"]').forEach(function(el) {
+        if (entry[el.name] !== undefined) {
+            el.checked = entry[el.name];
+            // Update the visual state of custom checkboxes
+            const div = el.closest('.form-field-custom-checkbox');
+            if (div) {
+                if (el.checked) {
+                    div.classList.add('checked');
+                    } else {
+                        div.classList.remove('checked');
+                    }
+                }
+            }
+        });
+        
+        // Update VIN editable field
+        if (entry.input_vin_number !== undefined) {
+            vinEditable.textContent = entry.input_vin_number;
+            updateVinHighlight();
+        }
+        
+        // Update timestamp
+        lastKnownTimestamp = entry.timestamp;
+        
+        // Show reload status
+        document.getElementById('save-status').textContent = 'Work order reloaded';
+        document.getElementById('save-status').style.color = '#00ff88';
+        setTimeout(function() { 
+            document.getElementById('save-status').textContent = ''; 
+        }, 2000);
+}
+
+// Clear all parts and quantities fields
+function clearPartsFields() {
+    // Clear quantities (q1 through q17)
+    for (let i = 1; i <= 17; i++) {
+        const qField = document.getElementById('input_q' + i);
+        if (qField) qField.value = '';
+    }
+    // Clear part numbers (pn1 through pn17)
+    for (let i = 1; i <= 17; i++) {
+        const pnField = document.getElementById('input_pn' + i);
+        if (pnField) pnField.value = '';
+    }
+}
+
+// Set default emissions checkboxes
+function setDefaultCheckboxes() {
+    const checkboxIds = ['input_chk_cat', 'input_chk_fuel_rest', 'input_chk_pcv', 'input_chk_egr', 'input_chk_air', 'input_chk_evap'];
+    checkboxIds.forEach(function(id) {
+        const checkbox = document.getElementById(id);
+        if (checkbox) {
+            checkbox.checked = true;
+            // Update visual state
+            const div = checkbox.closest('.form-field-custom-checkbox');
+            if (div) {
+                div.classList.add('checked');
+            }
+        }
+    });
+}
+
 // Set current date when page loads
 setCurrentDate();
+
+// Clear parts fields on page load
+clearPartsFields();
+
+// Set default checkboxes for new work orders
+setDefaultCheckboxes();
+
+// Setup field change tracking on page load
+setTimeout(function() {
+    setupFieldChangeTracking();
+}, 500);
+
+// Generate initial work order number after Firebase is ready
+setTimeout(function() {
+    generateNextWorkOrderNumber();
+}, 1000);
 
 // Helper function to normalize strings by removing special characters for searching
 function normalizeForSearch(str) {
@@ -2425,6 +2567,40 @@ function renderDropdown(entries, filter = '') {
     });
 }
 
+// Generate next sequential work order number
+async function generateNextWorkOrderNumber() {
+    try {
+        const roField = document.getElementById('input_ro');
+        if (!roField) return;
+        
+        const snapshot = await db.ref('repairOrders').once('value');
+        let maxNumber = 14; // Start at 14 so first work order will be 15
+        
+        snapshot.forEach((child) => {
+            const woNum = child.key;
+            // Only consider numbers that are reasonable work order numbers (less than 10000)
+            // This ignores timestamp-based keys (which are 13+ digits)
+            const numMatch = woNum.match(/^(\d+)$/);
+            if (numMatch) {
+                const num = parseInt(numMatch[1], 10);
+                // Only count numbers less than 10000 as valid work order numbers
+                if (num < 10000 && num > maxNumber) {
+                    maxNumber = num;
+                }
+            }
+        });
+        
+        // Next number is max + 1
+        const nextNumber = (maxNumber + 1).toString();
+        roField.value = nextNumber;
+        console.log('Generated work order number:', nextNumber);
+        return nextNumber;
+    } catch (error) {
+        console.error('Error generating work order number:', error);
+        return '15'; // Fallback to 15 if error
+    }
+}
+
 function fetchEntries() {
     db.ref('repairOrders').on('value', function(snapshot) {
         entriesCache = snapshot.val() || {};
@@ -2461,12 +2637,15 @@ entriesDropdown.addEventListener('blur', function() {
 entriesDropdown.addEventListener('change', function() {
     const key = entriesDropdown.value;
     if (!key || !entriesCache[key]) {
+        stopWatchingWorkOrder(); // Stop watching when clearing
         currentEditKey = null;
+        currentWorkOrderNumber = null; // Reset work order tracking
         deleteEntryBtn.style.display = 'none';
         newOrderBtn.style.display = 'none';
         saveBtn.textContent = 'Save';
         document.getElementById('save-status').textContent = '';
         document.getElementById('repair-order-form').reset();
+        clearPartsFields(); // Clear parts fields
         // Reset custom checkbox visual states
         document.querySelectorAll('.form-field-custom-checkbox').forEach(function(div) {
             div.classList.remove('checked');
@@ -2477,34 +2656,18 @@ entriesDropdown.addEventListener('change', function() {
     }
     const entry = entriesCache[key];
     currentEditKey = key;
-    // Populate form fields
-    const form = document.getElementById('repair-order-form');
-    form.querySelectorAll('input[type="text"], textarea, input[type="hidden"]').forEach(function(el) {
-        if (entry[el.name] !== undefined) el.value = entry[el.name];
-    });
-    form.querySelectorAll('input[type="checkbox"]').forEach(function(el) {
-        if (entry[el.name] !== undefined) {
-            el.checked = entry[el.name];
-            // Update the visual state of custom checkboxes
-            const div = el.closest('.form-field-custom-checkbox');
-            if (div) {
-                if (el.checked) {
-                    div.classList.add('checked');
-                } else {
-                    div.classList.remove('checked');
-                }
-            }
-        }
-    });
-    // Also update VIN editable field
-    if (entry.input_vin_number !== undefined) {
-        vinEditable.textContent = entry.input_vin_number;
-        updateVinHighlight();
-    }
+    currentWorkOrderNumber = key; // Track the work order number
+    
+    // Load the data
+    loadWorkOrderData(entry);
+    
     saveBtn.textContent = 'Update';
     document.getElementById('save-status').textContent = 'Editing entry...';
     deleteEntryBtn.style.display = 'inline-block';
     newOrderBtn.style.display = 'inline-block';
+    
+    // Start watching for real-time updates
+    startWatchingWorkOrder(key);
 });
 
 deleteEntryBtn.addEventListener('click', function() {
@@ -2528,12 +2691,13 @@ deleteEntryBtn.addEventListener('click', function() {
 });
 
 // New Work Order button functionality
-document.getElementById('new-work-order-btn').addEventListener('click', function() {
+document.getElementById('new-work-order-btn').addEventListener('click', async function() {
     if (!confirm('Create a completely new work order? This will clear all current data.')) return;
     
     // Reset the entire form
     const form = document.getElementById('repair-order-form');
     form.reset();
+    clearPartsFields(); // Clear parts fields
     
     // Reset custom checkbox visual states
     document.querySelectorAll('.form-field-custom-checkbox').forEach(function(div) {
@@ -2547,8 +2711,15 @@ document.getElementById('new-work-order-btn').addEventListener('click', function
     // Set current date
     setCurrentDate();
     
+    // Set default checkboxes
+    setDefaultCheckboxes();
+    
+    // Generate next work order number
+    await generateNextWorkOrderNumber();
+    
     // Reset UI state
     currentEditKey = null;
+    currentWorkOrderNumber = null; // Reset work order tracking
     saveBtn.textContent = 'Save';
     entriesDropdown.value = '';
     entrySearch.value = '';
@@ -2559,7 +2730,7 @@ document.getElementById('new-work-order-btn').addEventListener('click', function
 });
 
 // New Order (Same Customer) button functionality
-newOrderBtn.addEventListener('click', function() {
+newOrderBtn.addEventListener('click', async function() {
     if (!confirm('Create a new work order using the current customer and vehicle information?')) return;
     
     // Store customer and vehicle info
@@ -2586,6 +2757,7 @@ newOrderBtn.addEventListener('click', function() {
     
     // Reset the form
     form.reset();
+    clearPartsFields(); // Clear parts fields
     document.querySelectorAll('.form-field-custom-checkbox').forEach(function(div) {
         div.classList.remove('checked');
     });
@@ -2605,12 +2777,20 @@ newOrderBtn.addEventListener('click', function() {
     // Set current date
     setCurrentDate();
     
+    // Set default checkboxes
+    setDefaultCheckboxes();
+    
+    // Generate next work order number
+    await generateNextWorkOrderNumber();
+    
     // Reset UI state
     currentEditKey = null;
+    currentWorkOrderNumber = null; // Reset work order tracking
     saveBtn.textContent = 'Save';
     entriesDropdown.value = '';
     deleteEntryBtn.style.display = 'none';
     newOrderBtn.style.display = 'none';
+    
     document.getElementById('save-status').textContent = 'New order ready for same customer/vehicle';
     setTimeout(function() { document.getElementById('save-status').textContent = ''; }, 3000);
 });
@@ -2626,39 +2806,49 @@ saveBtn.addEventListener('click', function() {
     });
     data.timestamp = new Date().toISOString();
     const status = document.getElementById('save-status');
+    
+    // Get work order number - use tracked number or from field
+    const woNumber = currentWorkOrderNumber || data.input_ro;
+    
+    if (!woNumber) {
+        status.textContent = 'Error: Work order number missing!';
+        status.style.color = '#dc3545';
+        return;
+    }
+    
+    // Update our known timestamp before saving
+    lastKnownTimestamp = data.timestamp;
+    
     try {
-        if (currentEditKey) {
-            db.ref('repairOrders/' + currentEditKey).set(data, function(error) {
+        // Check if work order already exists
+        db.ref('repairOrders/' + woNumber).once('value').then(function(snapshot) {
+            const exists = snapshot.exists();
+            
+            // Save all data
+            db.ref('repairOrders/' + woNumber).set(data, function(error) {
                 if (error) {
-                    status.textContent = 'Error updating!';
+                    status.textContent = exists ? 'Error updating!' : 'Error saving!';
                     status.style.color = '#dc3545';
                 } else {
-                    status.textContent = 'Updated!';
+                    // Track this work order for future updates
+                    currentWorkOrderNumber = woNumber;
+                    currentEditKey = woNumber;
+                    
+                    status.textContent = exists ? 'Updated!' : 'Saved!';
                     status.style.color = '#28a745';
                     setTimeout(function() { status.textContent = ''; }, 2000);
-                    // Keep the form in edit mode after successful update
-                    // Don't reset currentEditKey or button states - stay in edit mode
+                    
+                    // Update button text to reflect we're now editing
+                    if (!exists) {
+                        saveBtn.textContent = 'Update';
+                        deleteEntryBtn.style.display = 'inline-block';
+                        newOrderBtn.style.display = 'inline-block';
+                        // Start watching this new work order
+                        startWatchingWorkOrder(woNumber);
+                    }
                 }
             });
-        } else {
-            db.ref('repairOrders').push(data, function(error) {
-                if (error) {
-                    status.textContent = 'Error saving!';
-                    status.style.color = '#dc3545';
-                } else {
-                    status.textContent = 'Saved!';
-                    status.style.color = '#28a745';
-                    setTimeout(function() { status.textContent = ''; }, 2000);
-                    form.reset();
-                    // Reset custom checkbox visual states
-                    document.querySelectorAll('.form-field-custom-checkbox').forEach(function(div) {
-                        div.classList.remove('checked');
-                    });
-                    vinEditable.textContent = '';
-                    updateVinHighlight();
-                }
-            });
-        }
+        });
     } catch (e) {
         status.textContent = 'Save failed!';
         status.style.color = '#dc3545';
