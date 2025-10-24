@@ -934,10 +934,21 @@
                 font-size: 11px;
             }
             
-            /* Larger font for PSI fields */
+            /* Larger font for tire and brake specs */
             #print_tire_psi_front,
             #print_tire_psi_rear {
-                font-size: 15px;
+                font-size: 14px;
+            }
+            
+            #print_tire_tread_lf,
+            #print_tire_tread_rf,
+            #print_tire_tread_lr,
+            #print_tire_tread_rr,
+            #print_brakes_lf,
+            #print_brakes_rf,
+            #print_brakes_lr,
+            #print_brakes_rr {
+                font-size: 14px;
             }
             
             .print-field.multiline {
@@ -976,43 +987,43 @@
             #print_engine_size { top: 239.281px; left: 713.5px; width: 81px; height: 23px; font-size: 11px; }
             
             /* Main work description */
-            #print_services_performed { top: 307.281px; left: 188.5px; width: 610px; height: 644px; font-size: 9px; line-height: 1.2; overflow: hidden; text-align: center !important; text-transform: uppercase !important; white-space: pre-wrap; display: flex !important; justify-content: center !important; align-items: flex-start !important; }
+            #print_services_performed { top: 307.281px; left: 188.5px; width: 610px; height: 644px; font-size: 13px; line-height: 1.2; overflow: hidden; text-align: center !important; text-transform: uppercase !important; white-space: pre-wrap; display: flex !important; justify-content: center !important; align-items: flex-start !important; }
             
             /* Parts quantity and part numbers (left column) */
-            #print_q1 { top: 309.281px; left: 52.5px; width: 49px; height: 28px; font-size: 10px; text-align: center; }
-            #print_pn1 { top: 309.656px; left: 104.375px; width: 80px; height: 28px; font-size: 9px; }
-            #print_q2 { top: 346.281px; left: 52.5px; width: 47px; height: 29px; font-size: 10px; text-align: center; }
-            #print_pn2 { top: 344.656px; left: 105.375px; width: 79px; height: 33px; font-size: 9px; }
-            #print_q3 { top: 385.281px; left: 53.5px; width: 45px; height: 31px; font-size: 10px; text-align: center; }
-            #print_pn3 { top: 383.656px; left: 105.375px; width: 77px; height: 31px; font-size: 9px; }
-            #print_q4 { top: 423.281px; left: 52.5px; width: 48px; height: 30px; font-size: 10px; text-align: center; }
-            #print_pn4 { top: 423.656px; left: 105.375px; width: 77px; height: 29px; font-size: 9px; }
-            #print_q5 { top: 460.281px; left: 53.5px; width: 46px; height: 31px; font-size: 10px; text-align: center; }
-            #print_pn5 { top: 460.656px; left: 105.375px; width: 76px; height: 30px; font-size: 9px; }
-            #print_q6 { top: 497.281px; left: 52.5px; width: 47px; height: 32px; font-size: 10px; text-align: center; }
-            #print_pn6 { top: 498.656px; left: 105.375px; width: 79px; height: 32px; font-size: 9px; }
-            #print_q7 { top: 538.281px; left: 53.5px; width: 46px; height: 29px; font-size: 10px; text-align: center; }
-            #print_pn7 { top: 535.656px; left: 104.375px; width: 80px; height: 32px; font-size: 9px; }
-            #print_q8 { top: 576.281px; left: 53.5px; width: 46px; height: 27px; font-size: 10px; text-align: center; }
-            #print_pn8 { top: 574.656px; left: 105.375px; width: 80px; height: 30px; font-size: 9px; }
-            #print_q9 { top: 614.281px; left: 53.5px; width: 46px; height: 28px; font-size: 10px; text-align: center; }
-            #print_pn9 { top: 610.656px; left: 104.375px; width: 78px; height: 33px; font-size: 9px; }
-            #print_q10 { top: 651.281px; left: 53.5px; width: 46px; height: 31px; font-size: 10px; text-align: center; }
-            #print_pn10 { top: 650.656px; left: 105.375px; width: 77px; height: 32px; font-size: 9px; }
-            #print_q11 { top: 687.281px; left: 54.5px; width: 44px; height: 35px; font-size: 10px; text-align: center; }
-            #print_pn11 { top: 687.656px; left: 105.375px; width: 76px; height: 33px; font-size: 9px; }
-            #print_q12 { top: 728.281px; left: 53.5px; width: 46px; height: 30px; font-size: 10px; text-align: center; }
-            #print_pn12 { top: 727.656px; left: 105.375px; width: 79px; height: 30px; font-size: 9px; }
-            #print_q13 { top: 763.656px; left: 51.375px; width: 49px; height: 31px; font-size: 10px; text-align: center; }
-            #print_pn13 { top: 764.656px; left: 105.375px; width: 79px; height: 31px; font-size: 9px; }
-            #print_q14 { top: 802.656px; left: 52.375px; width: 48px; height: 31px; font-size: 10px; text-align: center; }
-            #print_pn14 { top: 803.656px; left: 105.375px; width: 79px; height: 30px; font-size: 9px; }
-            #print_q15 { top: 840.656px; left: 52.375px; width: 47px; height: 32px; font-size: 10px; text-align: center; }
-            #print_pn15 { top: 840.656px; left: 105.375px; width: 79px; height: 32px; font-size: 9px; }
-            #print_q16 { top: 879.656px; left: 52.375px; width: 47px; height: 30px; font-size: 10px; text-align: center; }
-            #print_pn16 { top: 878.656px; left: 105.375px; width: 79px; height: 31px; font-size: 9px; }
-            #print_q17 { top: 917.656px; left: 52.375px; width: 47px; height: 30px; font-size: 10px; text-align: center; }
-            #print_pn17 { top: 917.656px; left: 105.375px; width: 79px; height: 31px; font-size: 9px; }
+            #print_q1 { top: 309.281px; left: 52.5px; width: 49px; height: 28px; font-size: 13px; text-align: center; }
+            #print_pn1 { top: 309.656px; left: 104.375px; width: 80px; height: 28px; font-size: 11px; }
+            #print_q2 { top: 346.281px; left: 52.5px; width: 47px; height: 29px; font-size: 13px; text-align: center; }
+            #print_pn2 { top: 344.656px; left: 105.375px; width: 79px; height: 33px; font-size: 11px; }
+            #print_q3 { top: 385.281px; left: 53.5px; width: 45px; height: 31px; font-size: 13px; text-align: center; }
+            #print_pn3 { top: 383.656px; left: 105.375px; width: 77px; height: 31px; font-size: 11px; }
+            #print_q4 { top: 423.281px; left: 52.5px; width: 48px; height: 30px; font-size: 13px; text-align: center; }
+            #print_pn4 { top: 423.656px; left: 105.375px; width: 77px; height: 29px; font-size: 11px; }
+            #print_q5 { top: 460.281px; left: 53.5px; width: 46px; height: 31px; font-size: 13px; text-align: center; }
+            #print_pn5 { top: 460.656px; left: 105.375px; width: 76px; height: 30px; font-size: 11px; }
+            #print_q6 { top: 497.281px; left: 52.5px; width: 47px; height: 32px; font-size: 13px; text-align: center; }
+            #print_pn6 { top: 498.656px; left: 105.375px; width: 79px; height: 32px; font-size: 11px; }
+            #print_q7 { top: 538.281px; left: 53.5px; width: 46px; height: 29px; font-size: 13px; text-align: center; }
+            #print_pn7 { top: 535.656px; left: 104.375px; width: 80px; height: 32px; font-size: 11px; }
+            #print_q8 { top: 576.281px; left: 53.5px; width: 46px; height: 27px; font-size: 13px; text-align: center; }
+            #print_pn8 { top: 574.656px; left: 105.375px; width: 80px; height: 30px; font-size: 11px; }
+            #print_q9 { top: 614.281px; left: 53.5px; width: 46px; height: 28px; font-size: 13px; text-align: center; }
+            #print_pn9 { top: 610.656px; left: 104.375px; width: 78px; height: 33px; font-size: 11px; }
+            #print_q10 { top: 651.281px; left: 53.5px; width: 46px; height: 31px; font-size: 13px; text-align: center; }
+            #print_pn10 { top: 650.656px; left: 105.375px; width: 77px; height: 32px; font-size: 11px; }
+            #print_q11 { top: 687.281px; left: 54.5px; width: 44px; height: 35px; font-size: 13px; text-align: center; }
+            #print_pn11 { top: 687.656px; left: 105.375px; width: 76px; height: 33px; font-size: 11px; }
+            #print_q12 { top: 728.281px; left: 53.5px; width: 46px; height: 30px; font-size: 13px; text-align: center; }
+            #print_pn12 { top: 727.656px; left: 105.375px; width: 79px; height: 30px; font-size: 11px; }
+            #print_q13 { top: 763.656px; left: 51.375px; width: 49px; height: 31px; font-size: 13px; text-align: center; }
+            #print_pn13 { top: 764.656px; left: 105.375px; width: 79px; height: 31px; font-size: 11px; }
+            #print_q14 { top: 802.656px; left: 52.375px; width: 48px; height: 31px; font-size: 13px; text-align: center; }
+            #print_pn14 { top: 803.656px; left: 105.375px; width: 79px; height: 30px; font-size: 11px; }
+            #print_q15 { top: 840.656px; left: 52.375px; width: 47px; height: 32px; font-size: 13px; text-align: center; }
+            #print_pn15 { top: 840.656px; left: 105.375px; width: 79px; height: 32px; font-size: 11px; }
+            #print_q16 { top: 879.656px; left: 52.375px; width: 47px; height: 30px; font-size: 13px; text-align: center; }
+            #print_pn16 { top: 878.656px; left: 105.375px; width: 79px; height: 31px; font-size: 11px; }
+            #print_q17 { top: 917.656px; left: 52.375px; width: 47px; height: 30px; font-size: 13px; text-align: center; }
+            #print_pn17 { top: 917.656px; left: 105.375px; width: 79px; height: 31px; font-size: 11px; }
             
             /* Checkboxes for emissions systems */
             #print_chk_cat { top: 954.188px; left: 96.625px; width: 16px; height: 18px; font-size: 14px; text-align: center; }
@@ -1026,20 +1037,20 @@
             #print_county { top: 955.281px; left: 709.5px; width: 88px; height: 18px; font-size: 10px; }
             
             /* Brakes */
-            #print_brakes_lf { top: 977.281px; left: 204.5px; width: 93px; height: 15px; font-size: 10px; text-align: center; }
-            #print_brakes_rf { top: 976.281px; left: 332.5px; width: 91px; height: 17px; font-size: 10px; text-align: center; }
-            #print_brakes_lr { top: 977.281px; left: 456.5px; width: 92px; height: 15px; font-size: 10px; text-align: center; }
-            #print_brakes_rr { top: 977.281px; left: 584.5px; width: 88px; height: 15px; font-size: 10px; text-align: center; }
+            #print_brakes_lf { top: 977.281px; left: 204.5px; width: 93px; height: 15px; font-size: 14px; text-align: center; }
+            #print_brakes_rf { top: 976.281px; left: 332.5px; width: 91px; height: 17px; font-size: 14px; text-align: center; }
+            #print_brakes_lr { top: 977.281px; left: 456.5px; width: 92px; height: 15px; font-size: 14px; text-align: center; }
+            #print_brakes_rr { top: 977.281px; left: 584.5px; width: 88px; height: 15px; font-size: 14px; text-align: center; }
             
             /* Tire tread */
-            #print_tire_tread_lf { top: 998.281px; left: 204.5px; width: 93px; height: 16px; font-size: 10px; text-align: center; }
-            #print_tire_tread_rf { top: 997.281px; left: 333.5px; width: 88px; height: 18px; font-size: 10px; text-align: center; }
-            #print_tire_tread_lr { top: 997.281px; left: 457.5px; width: 89px; height: 18px; font-size: 10px; text-align: center; }
-            #print_tire_tread_rr { top: 997.281px; left: 584.5px; width: 87px; height: 18px; font-size: 10px; text-align: center; }
+            #print_tire_tread_lf { top: 998.281px; left: 204.5px; width: 93px; height: 16px; font-size: 14px; text-align: center; }
+            #print_tire_tread_rf { top: 997.281px; left: 333.5px; width: 88px; height: 18px; font-size: 14px; text-align: center; }
+            #print_tire_tread_lr { top: 997.281px; left: 457.5px; width: 89px; height: 18px; font-size: 14px; text-align: center; }
+            #print_tire_tread_rr { top: 997.281px; left: 584.5px; width: 87px; height: 18px; font-size: 14px; text-align: center; }
             
             /* Tire PSI */
-            #print_tire_psi_front { top: 997.281px; left: 729.5px; width: 24px; height: 19px; font-size: 9px; text-align: center; }
-            #print_tire_psi_rear { top: 997.281px; left: 770.5px; width: 26px; height: 18px; font-size: 9px; text-align: center; }
+            #print_tire_psi_front { top: 997.281px; left: 729.5px; width: 24px; height: 19px; font-size: 14px; text-align: center; }
+            #print_tire_psi_rear { top: 997.281px; left: 770.5px; width: 26px; height: 18px; font-size: 14px; text-align: center; }
             
             @page {
                 size: letter;
@@ -2619,6 +2630,44 @@
             });
         });
         
+        // Auto-resize print fields to fit content
+        function autoResizePrintFields() {
+            // Check all quantity and part number fields (q1-q17, pn1-pn17)
+            for (let i = 1; i <= 17; i++) {
+                // Quantity fields - start at 13px, shrink if needed
+                const qField = document.getElementById('print_q' + i);
+                if (qField && qField.textContent) {
+                    const textLength = qField.textContent.length;
+                    if (textLength > 4) {
+                        qField.style.fontSize = '10px';
+                    } else if (textLength > 3) {
+                        qField.style.fontSize = '11px';
+                    } else {
+                        qField.style.fontSize = '13px';
+                    }
+                }
+                
+                // Part number fields - start at 11px, shrink if needed
+                const pnField = document.getElementById('print_pn' + i);
+                if (pnField && pnField.textContent) {
+                    const textLength = pnField.textContent.length;
+                    if (textLength > 40) {
+                        pnField.style.fontSize = '7px';
+                        pnField.style.lineHeight = '1.1';
+                    } else if (textLength > 30) {
+                        pnField.style.fontSize = '8px';
+                        pnField.style.lineHeight = '1.1';
+                    } else if (textLength > 20) {
+                        pnField.style.fontSize = '9px';
+                    } else if (textLength > 12) {
+                        pnField.style.fontSize = '10px';
+                    } else {
+                        pnField.style.fontSize = '11px';
+                    }
+                }
+            }
+        }
+        
         // Sync data to print fields before printing
         window.addEventListener('beforeprint', function() {
             // All basic text fields that map directly
@@ -2689,6 +2738,9 @@
                     printField.textContent = checkbox.checked ? '✓' : '';
                 }
             });
+            
+            // Auto-resize part number and quantity fields to prevent truncation
+            autoResizePrintFields();
         });
         
         // Save Work Order
