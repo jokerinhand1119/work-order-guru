@@ -2647,16 +2647,26 @@
                     }
                 }
                 
-                // Part number fields - start at 11px, shrink if needed
+                // Part number fields - enable wrapping and adjust font size
                 const pnField = document.getElementById('print_pn' + i);
                 if (pnField && pnField.textContent) {
                     const textLength = pnField.textContent.length;
+                    
+                    // Enable text wrapping for part numbers
+                    pnField.style.whiteSpace = 'normal';
+                    pnField.style.wordBreak = 'break-word';
+                    pnField.style.lineHeight = '1.1';
+                    pnField.style.textAlign = 'left';
+                    pnField.style.justifyContent = 'flex-start';
+                    pnField.style.alignItems = 'flex-start';
+                    pnField.style.padding = '1px 2px';
+                    pnField.style.overflow = 'visible';
+                    
+                    // Adjust font size based on length
                     if (textLength > 40) {
                         pnField.style.fontSize = '7px';
-                        pnField.style.lineHeight = '1.1';
                     } else if (textLength > 30) {
                         pnField.style.fontSize = '8px';
-                        pnField.style.lineHeight = '1.1';
                     } else if (textLength > 20) {
                         pnField.style.fontSize = '9px';
                     } else if (textLength > 12) {
