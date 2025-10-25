@@ -2867,11 +2867,17 @@ function clearPartsFields() {
     for (let i = 1; i <= 17; i++) {
         const qField = document.getElementById('input_q' + i);
         if (qField) qField.textContent = '';
+        // Also clear print div
+        const qPrint = document.getElementById('print_q' + i);
+        if (qPrint) qPrint.textContent = '';
     }
     // Clear part numbers (pn1 through pn17)
     for (let i = 1; i <= 17; i++) {
         const pnField = document.getElementById('input_pn' + i);
         if (pnField) pnField.textContent = '';
+        // Also clear print div
+        const pnPrint = document.getElementById('print_pn' + i);
+        if (pnPrint) pnPrint.textContent = '';
     }
 }
 
