@@ -139,16 +139,16 @@
         /* VIN Scanner Camera Styles */
         .scan-vin-btn {
             position: absolute;
-            right: -35px;
+            right: -28px;
             top: 50%;
             transform: translateY(-50%);
-            width: 30px;
-            height: 30px;
+            width: 24px !important;
+            height: 24px !important;
             background: linear-gradient(135deg, #00ff88 0%, #00cc6a 100%);
             border: none;
-            border-radius: 6px;
+            border-radius: 5px;
             cursor: pointer;
-            font-size: 16px;
+            font-size: 13px !important;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -885,6 +885,10 @@
                 box-shadow: 0 4px 16px rgba(0, 255, 136, 0.4);
                 transition: all 0.3s ease;
                 animation: pulse-glow 2s infinite;
+                width: 24px !important;
+                height: 24px !important;
+                font-size: 13px !important;
+                right: -28px !important;
             }
             
             @keyframes pulse-glow {
@@ -1059,7 +1063,6 @@
             <div id="field_vin_number_div" class="form-field form-field-text-input" style="top: 234.281px; left: 119.5px; width: 273px; height: 31px; position: relative;">
                 <div id="vin_editable" contenteditable="true" style="width: 100%; height: 100%; border: none; padding: 5px; font-size: 14px; text-transform: uppercase; background: transparent; outline: none; text-align: center;" tabindex="12"></div>
                 <input type="hidden" id="input_vin_number" name="input_vin_number">
-                <button type="button" class="scan-vin-btn" id="scan-vin-btn" title="Scan VIN with Camera">📷</button>
             </div>
             <div id="field_engine_size_div" class="form-field form-field-text-input" style="top: 239.281px; left: 713.5px; width: 81px; height: 23px;"><input type="text" id="input_engine_size" name="input_engine_size" placeholder="" tabindex="13"></div>
             
