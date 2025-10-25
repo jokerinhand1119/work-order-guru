@@ -169,6 +169,11 @@
                 #entries-dropdown option {
                     background: #2a2a3c;
                     color: #ffffff;
+                    padding: 10px 8px !important;
+                    line-height: 1.6 !important;
+                    min-height: 60px !important;
+                    white-space: pre-line !important;
+                    font-size: 13px !important;
                 }
                 
                 #firebase-status-text.status-connecting {
@@ -3092,11 +3097,23 @@
                         // Handle both formats: mobile (customer_name) and original (input_customer_name)
                         const date = data.date || data.input_date || '?';
                         const customerName = data.customer_name || data.input_customer_name || '?';
+                        const vinNumber = data.vin_number || data.input_vin_number || '';
                         const year = data.year || (data.input_year_make_model_trim ? data.input_year_make_model_trim.split(' ')[0] : '');
                         const make = data.make || (data.input_year_make_model_trim ? data.input_year_make_model_trim.split(' ')[1] : '');
                         const model = data.model || (data.input_year_make_model_trim ? data.input_year_make_model_trim.split(' ').slice(2).join(' ') : '');
                         
-                        option.textContent = `${date} - ${customerName} - ${year} ${make} ${model}`.trim();
+                        // Build multi-line display text with emojis and last 8 digits of VIN
+                        let displayText = `📅 ${date}\n`;
+                        if (vinNumber) {
+                            // Get last 8 digits of VIN
+                            const shortVin = vinNumber.length > 8 ? vinNumber.slice(-8) : vinNumber;
+                            displayText += `👤 ${customerName} • 🔑 ${shortVin}\n`;
+                        } else {
+                            displayText += `👤 ${customerName}\n`;
+                        }
+                        displayText += `🚗 ${year} ${make} ${model}`;
+                        
+                        option.textContent = displayText;
                         dropdown.appendChild(option);
                         
                         console.log(`Entry ${index + 1}: ${option.textContent}`);
