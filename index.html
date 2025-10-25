@@ -17,12 +17,14 @@
         
         /* Improved dropdown option styling - Dark Mode */
         #entries-dropdown option {
-            padding: 6px 4px;
-            line-height: 1.4;
-            white-space: normal;
+            padding: 10px 8px;
+            line-height: 1.6;
+            white-space: pre-line !important;
             text-transform: uppercase;
             background: #2d2d2d !important;
             color: #ffffff !important;
+            min-height: 60px;
+            font-size: 13px;
         }
         
         #entries-dropdown option:not(:first-child) {
@@ -2938,21 +2940,16 @@ function renderDropdown(entries, filter = '') {
         const plateNumber = entry.input_plate_number || '';
         const date = entry.input_date || '';
         
-        // Create a more informative label with vehicle info prominently displayed
-        let label = '';
-        if (customerName) label += customerName.toUpperCase();
-        if (yearMakeModel) {
-            label += (label ? ' | ' : '') + yearMakeModel.toUpperCase();
-        }
+        // Create multi-line label with emojis and last 8 digits of VIN
+        let label = `📅 ${date}\n`;
         if (vinNumber) {
-            label += (label ? ' | VIN: ' : 'VIN: ') + vinNumber.toUpperCase();
+            // Get last 8 digits of VIN
+            const shortVin = vinNumber.length > 8 ? vinNumber.slice(-8).toUpperCase() : vinNumber.toUpperCase();
+            label += `👤 ${customerName.toUpperCase()} • 🔑 ${shortVin}\n`;
+        } else {
+            label += `👤 ${customerName.toUpperCase()}\n`;
         }
-        if (plateNumber) {
-            label += (label ? ' | PLATE: ' : 'PLATE: ') + plateNumber.toUpperCase();
-        }
-        if (date) {
-            label += (label ? ' | ' : '') + date.toUpperCase();
-        }
+        label += `🚗 ${yearMakeModel.toUpperCase()}`;
         
         // Include all searchable fields in search string
         const searchString = `${customerName} ${yearMakeModel} ${vinNumber} ${plateNumber} ${date}`;
