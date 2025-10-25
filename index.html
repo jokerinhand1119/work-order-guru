@@ -402,6 +402,17 @@
             font-size: 14px !important;
         }
         
+        /* County field - allow text wrapping and smaller font for long text */
+        #input_county {
+            font-size: 11px !important;
+            white-space: normal !important;
+            word-wrap: break-word !important;
+            word-break: break-word !important;
+            overflow: hidden !important;
+            line-height: 1.2 !important;
+            padding: 2px !important;
+        }
+        
         /* Touch-friendly inputs on mobile - but don't scale individual fields */
         @media (max-width: 900px) {
             .form-field-text-input input, .form-field-text-input textarea {
