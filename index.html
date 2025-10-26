@@ -2976,36 +2976,46 @@ function renderDropdown(entries, filter = '') {
 }
 
 // Generate next sequential work order number
+// Generate work order number in format MMYYNNN (Month, Year, Counter)
 async function generateNextWorkOrderNumber() {
     try {
         const roField = document.getElementById('input_ro');
         if (!roField) return;
         
-        const snapshot = await db.ref('repairOrders').once('value');
-        let maxNumber = 14; // Start at 14 so first work order will be 15
+        const now = new Date();
+        const month = String(now.getMonth() + 1).padStart(2, '0'); // 01-12
+        const year = String(now.getFullYear()).slice(-2); // Last 2 digits of year
+        const prefix = month + year; // e.g., "1025" for October 2025
         
+        const snapshot = await db.ref('repairOrders').once('value');
+        let maxCounter = 0;
+        
+        // Find the highest counter for this month/year
         snapshot.forEach((child) => {
             const woNum = child.key;
-            // Only consider numbers that are reasonable work order numbers (less than 10000)
-            // This ignores timestamp-based keys (which are 13+ digits)
-            const numMatch = woNum.match(/^(\d+)$/);
-            if (numMatch) {
-                const num = parseInt(numMatch[1], 10);
-                // Only count numbers less than 10000 as valid work order numbers
-                if (num < 10000 && num > maxNumber) {
-                    maxNumber = num;
+            // Check if it matches our format (starts with current month/year prefix)
+            if (woNum && woNum.startsWith(prefix)) {
+                const counter = parseInt(woNum.slice(4), 10); // Get last 3 digits
+                if (!isNaN(counter) && counter > maxCounter) {
+                    maxCounter = counter;
                 }
             }
         });
         
-        // Next number is max + 1
-        const nextNumber = (maxNumber + 1).toString();
+        // Increment and format as 3-digit counter
+        const nextCounter = String(maxCounter + 1).padStart(3, '0');
+        const nextNumber = prefix + nextCounter; // e.g., "1025001"
+        
         roField.value = nextNumber;
         console.log('Generated work order number:', nextNumber);
         return nextNumber;
     } catch (error) {
         console.error('Error generating work order number:', error);
-        return '15'; // Fallback to 15 if error
+        // Fallback: use current month/year + 001
+        const now = new Date();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const year = String(now.getFullYear()).slice(-2);
+        return month + year + '001';
     }
 }
 
