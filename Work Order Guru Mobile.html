@@ -2758,9 +2758,42 @@
             autoResizePrintFields();
         });
         
+        // Generate work order number in format MMYYNNN (Month, Year, Counter)
+        async function generateWorkOrderNumber() {
+            const now = new Date();
+            const month = String(now.getMonth() + 1).padStart(2, '0'); // 01-12
+            const year = String(now.getFullYear()).slice(-2); // Last 2 digits of year
+            const prefix = month + year; // e.g., "1025" for October 2025
+            
+            try {
+                // Get all work orders from Firebase
+                const snapshot = await database.ref('repairOrders').once('value');
+                let maxCounter = 0;
+                
+                // Find the highest counter for this month/year
+                snapshot.forEach((child) => {
+                    const woNum = child.key;
+                    // Check if it matches our format (starts with current month/year prefix)
+                    if (woNum && woNum.startsWith(prefix)) {
+                        const counter = parseInt(woNum.slice(4), 10); // Get last 3 digits
+                        if (!isNaN(counter) && counter > maxCounter) {
+                            maxCounter = counter;
+                        }
+                    }
+                });
+                
+                // Increment and format as 3-digit counter
+                const nextCounter = String(maxCounter + 1).padStart(3, '0');
+                return prefix + nextCounter; // e.g., "1025001"
+            } catch (error) {
+                console.error('Error generating work order number:', error);
+                // Fallback: use prefix + 001
+                return prefix + '001';
+            }
+        }
+        
         // Save Work Order
-        // Update Existing Entry
-        function updateEntry() {
+        function saveWorkOrder() {
             const dropdown = document.getElementById('entries-dropdown');
             const selectedKey = dropdown && dropdown.value;
             if (!selectedKey) {
@@ -2870,7 +2903,7 @@
                 updateBtn.addEventListener('click', updateEntry);
             }
         });
-        function saveWorkOrder() {
+        async function saveWorkOrder() {
             // Helper function to get value safely
             const getValue = (id) => {
                 const el = document.getElementById(id);
@@ -2882,7 +2915,16 @@
             const customerName = getValue('customer_name');
             const address = getValue('input_address');
             const phoneNumber = getValue('phone_number');
-            const woNumber = getValue('work_order_number') || Date.now().toString();
+            
+            // Generate or use existing work order number
+            let woNumber = getValue('work_order_number');
+            if (!woNumber) {
+                woNumber = await generateWorkOrderNumber();
+                // Update the field with the generated number
+                const woField = document.getElementById('work_order_number');
+                if (woField) woField.value = woNumber;
+            }
+            
             const vinNumber = getValue('vin_number');
             const year = getValue('year');
             const make = getValue('make');
@@ -3051,7 +3093,7 @@
         }
         
         // Clear Form
-        function clearForm() {
+        async function clearForm() {
             if (confirm('Clear all fields?')) {
                 document.querySelectorAll('.form-input').forEach(input => input.value = '');
                 document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
@@ -3063,6 +3105,12 @@
                 const day = today.getDate().toString().padStart(2, '0');
                 const year = today.getFullYear();
                 document.getElementById('date').value = `${month}/${day}/${year}`;
+                
+                // Auto-generate work order number
+                const woNumber = await generateWorkOrderNumber();
+                const woField = document.getElementById('work_order_number');
+                if (woField) woField.value = woNumber;
+                
                 showToast('Form cleared');
             }
         }
@@ -3225,13 +3273,20 @@
         });
         
         // Initialize
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', async function() {
             // Set today's date in MM/DD/YYYY format
             const today = new Date();
             const month = (today.getMonth() + 1).toString().padStart(2, '0');
             const day = today.getDate().toString().padStart(2, '0');
             const year = today.getFullYear();
             document.getElementById('date').value = `${month}/${day}/${year}`;
+            
+            // Auto-generate work order number on page load
+            const woField = document.getElementById('work_order_number');
+            if (woField && !woField.value) {
+                const woNumber = await generateWorkOrderNumber();
+                woField.value = woNumber;
+            }
             
             loadPreviousEntries();
             showToast('Welcome! 📱');
