@@ -2950,20 +2950,38 @@ function renderDropdown(entries, filter = '') {
         // Helper function to parse date strings in MM/DD/YYYY format
         const parseDate = (dateStr) => {
             if (!dateStr) return 0;
-            const parts = dateStr.split('/');
+            const trimmed = dateStr.trim();
+            const parts = trimmed.split('/');
             if (parts.length === 3) {
-                // MM/DD/YYYY format
+                // MM/DD/YYYY format - parse carefully for Firefox compatibility
                 const month = parseInt(parts[0], 10);
                 const day = parseInt(parts[1], 10);
                 const year = parseInt(parts[2], 10);
-                return new Date(year, month - 1, day).getTime();
+                // Validate parsed values
+                if (!isNaN(month) && !isNaN(day) && !isNaN(year)) {
+                    const dateObj = new Date(year, month - 1, day);
+                    // Verify the date is valid
+                    if (dateObj.getFullYear() === year && dateObj.getMonth() === month - 1 && dateObj.getDate() === day) {
+                        return dateObj.getTime();
+                    }
+                }
             }
-            return new Date(dateStr).getTime() || 0;
+            // Fallback
+            const fallbackDate = new Date(trimmed);
+            return isNaN(fallbackDate.getTime()) ? 0 : fallbackDate.getTime();
         };
         
         // Use only the date field for sorting
-        const aTime = parseDate(a[1].input_date);
-        const bTime = parseDate(b[1].input_date);
+        const aTime = parseDate(a[1].input_date || '');
+        const bTime = parseDate(b[1].input_date || '');
+        
+        // If times are equal, use work order number as tiebreaker (newer WO numbers are higher)
+        if (aTime === bTime) {
+            const aWO = a[0] || '';
+            const bWO = b[0] || '';
+            return bWO.localeCompare(aWO);
+        }
+        
         return bTime - aTime; // Descending order (newest first)
     });
     
