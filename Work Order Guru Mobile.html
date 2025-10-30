@@ -3130,10 +3130,25 @@
                     
                     console.log(`Found ${entries.length} total entries in database`);
                     
-                    // Sort by timestamp or date
+                    // Sort by date field only (newest first)
                     entries.sort((a, b) => {
-                        const aTime = a.data.timestamp || new Date(a.data.input_date || a.data.date || 0).getTime();
-                        const bTime = b.data.timestamp || new Date(b.data.input_date || b.data.date || 0).getTime();
+                        // Helper function to parse date strings in MM/DD/YYYY format
+                        const parseDate = (dateStr) => {
+                            if (!dateStr) return 0;
+                            const parts = dateStr.split('/');
+                            if (parts.length === 3) {
+                                // MM/DD/YYYY format
+                                const month = parseInt(parts[0], 10);
+                                const day = parseInt(parts[1], 10);
+                                const year = parseInt(parts[2], 10);
+                                return new Date(year, month - 1, day).getTime();
+                            }
+                            return new Date(dateStr).getTime() || 0;
+                        };
+                        
+                        // Use only the date field for sorting
+                        const aTime = parseDate(a.data.input_date || a.data.date);
+                        const bTime = parseDate(b.data.input_date || b.data.date);
                         return bTime - aTime; // Newest first
                     });
                     
