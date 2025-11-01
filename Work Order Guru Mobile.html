@@ -1393,6 +1393,11 @@
         </button>
     </div>
     
+    <!-- Force Unlock Button (hidden by default) -->
+    <button id="force-unlock-btn" style="display:none;position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#ff9800 0%,#ff6f00 100%);color:white;border:none;padding:12px 24px;border-radius:12px;font-size:16px;font-weight:600;box-shadow:0 4px 16px rgba(255,152,0,0.5);z-index:9999;min-width:200px;cursor:pointer;pointer-events:auto;touch-action:manipulation;">
+        ⚠️ Force Unlock
+    </button>
+    
     <!-- Scanner -->
     <div class="scanner-overlay" id="scanner-overlay">
         <div class="scanner-header">
@@ -1573,6 +1578,34 @@
         // ===== FEATURE TOGGLES =====
         const PART_SCANNER_ENABLED = true; // Set to false to disable part barcode scanner
         
+        // --- LOCK SYSTEM ---
+        const DEBUG_LOCK_MODE = true; // Set to false in production
+        const LOCK_TIMEOUT = DEBUG_LOCK_MODE ? 60000 : 900000; // 1 min (debug) or 15 min (production)
+        const HEARTBEAT_INTERVAL = 30000; // 30 seconds
+        const LOCK_EXPIRY_TIME = 90000; // 90 seconds - lock expires if no heartbeat
+
+        let myDeviceId = localStorage.getItem('deviceId');
+        let myDeviceName = localStorage.getItem('deviceName');
+        let lockHeartbeatInterval = null;
+        let currentLockStatus = null; // 'locked-by-me', 'locked-by-other', 'unlocked'
+        let currentEditingWorkOrder = null; // Only set when we have the lock
+        let currentWatchingWorkOrder = null; // Track which WO we're watching (even in read-only)
+
+        // Generate unique device ID on first run
+        if (!myDeviceId) {
+            myDeviceId = 'device_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+            localStorage.setItem('deviceId', myDeviceId);
+            if (DEBUG_LOCK_MODE) console.log('🆔 Generated device ID:', myDeviceId);
+        }
+
+        // Prompt for device name on first run
+        if (!myDeviceName) {
+            myDeviceName = prompt('Enter a name for this device (e.g., "Shop iPhone", "Front Desk Tablet"):') || 'Unknown Device';
+            localStorage.setItem('deviceName', myDeviceName);
+        }
+
+        if (DEBUG_LOCK_MODE) console.log('🔧 Device initialized:', myDeviceName, '(' + myDeviceId + ')');
+        
         // Global variables
         let database;
         
@@ -1606,6 +1639,7 @@
                 }
             }, 10000); // 10 second timeout
             
+            // Monitor connection state - especially important for Firefox and mobile browsers
             database.ref('.info/connected').on('value', (snapshot) => {
                 const indicator = document.getElementById('status-indicator');
                 const statusText = document.getElementById('firebase-status-text');
@@ -1619,6 +1653,22 @@
                         statusText.textContent = 'Connected';
                         statusText.className = 'status-connected';
                     }
+                    
+                    // Re-verify lock status when reconnecting (Firefox/mobile fix)
+                    if (currentEditingWorkOrder && currentLockStatus === 'locked-by-me') {
+                        database.ref('repairOrders/' + currentEditingWorkOrder + '/lockedBy').once('value').then(snapshot => {
+                            const lockedBy = snapshot.val();
+                            if (lockedBy !== myDeviceId) {
+                                console.warn('⚠️ Lost lock during disconnect');
+                                currentLockStatus = 'unlocked';
+                                currentEditingWorkOrder = null;
+                                disableForm('Connection lost');
+                                showToast('⚠️ Lock lost during disconnect');
+                            } else if (DEBUG_LOCK_MODE) {
+                                console.log('✅ Lock still valid after reconnect');
+                            }
+                        });
+                    }
                 } else {
                     if (indicator) {
                         indicator.classList.remove('connected');
@@ -1627,6 +1677,12 @@
                     if (statusText) {
                         statusText.textContent = 'Connecting...';
                         statusText.className = 'status-connecting';
+                    }
+                    
+                    // Stop heartbeat during disconnect (Firefox/mobile fix)
+                    if (currentEditingWorkOrder && currentLockStatus === 'locked-by-me') {
+                        stopHeartbeat();
+                        if (DEBUG_LOCK_MODE) console.log('🔌 Disconnected - heartbeat stopped');
                     }
                 }
             });
@@ -1641,6 +1697,280 @@
             if (indicator) {
                 indicator.classList.add('error');
             }
+        }
+        
+        // --- LOCK MANAGEMENT FUNCTIONS ---
+        
+        // Acquire lock for a work order
+        function acquireLock(workOrderNumber, forceOverride = false) {
+            if (!workOrderNumber) return Promise.reject('No work order number');
+            
+            if (DEBUG_LOCK_MODE) console.log('🔒 Attempting to acquire lock for:', workOrderNumber);
+            
+            return database.ref('repairOrders/' + workOrderNumber).once('value').then(snapshot => {
+                const data = snapshot.val();
+                if (!data) return Promise.reject('Work order not found');
+                
+                // Check if already locked by someone else
+                if (data.lockedBy && data.lockedBy !== myDeviceId && !forceOverride) {
+                    // Check if lock is stale (no heartbeat)
+                    const lockAge = Date.now() - (data.lockHeartbeat || data.lockedAt || 0);
+                    
+                    if (lockAge < LOCK_EXPIRY_TIME) {
+                        // Lock is fresh - cannot acquire
+                        if (DEBUG_LOCK_MODE) console.log('🔒 Lock held by:', data.lockedByName, '(age:', Math.round(lockAge/1000), 'sec)');
+                        return Promise.reject({ 
+                            locked: true, 
+                            lockedBy: data.lockedByName || 'Another device',
+                            lockAge: lockAge
+                        });
+                    } else {
+                        // Lock is stale - can take over
+                        if (DEBUG_LOCK_MODE) console.log('☠️ Lock expired (age:', Math.round(lockAge/1000), 'sec) - taking over');
+                    }
+                }
+                
+                // Acquire lock - ONLY update lock fields
+                return database.ref('repairOrders/' + workOrderNumber).update({
+                    lockedBy: myDeviceId,
+                    lockedByName: myDeviceName,
+                    lockedAt: firebase.database.ServerValue.TIMESTAMP,
+                    lockHeartbeat: firebase.database.ServerValue.TIMESTAMP
+                }).then(() => {
+                    // Set up auto-release on disconnect
+                    database.ref('repairOrders/' + workOrderNumber + '/lockedBy').onDisconnect().remove();
+                    database.ref('repairOrders/' + workOrderNumber + '/lockedByName').onDisconnect().remove();
+                    database.ref('repairOrders/' + workOrderNumber + '/lockHeartbeat').onDisconnect().remove();
+                    database.ref('repairOrders/' + workOrderNumber + '/lockedAt').onDisconnect().remove();
+                    
+                    // Start heartbeat
+                    startHeartbeat(workOrderNumber);
+                    
+                    currentLockStatus = 'locked-by-me';
+                    currentEditingWorkOrder = workOrderNumber;
+                    if (DEBUG_LOCK_MODE) console.log('✅ Lock acquired successfully for WO:', workOrderNumber);
+                    
+                    // Don't call enableForm here - let the caller handle UI
+                    // This prevents duplicate/conflicting UI updates
+                    
+                    return true;
+                });
+            });
+        }
+        
+        // Release lock for a work order
+        function releaseLock(workOrderNumber) {
+            if (!workOrderNumber) return Promise.resolve();
+            
+            if (DEBUG_LOCK_MODE) console.log('🔓 Releasing lock for:', workOrderNumber);
+            
+            // Stop heartbeat
+            stopHeartbeat();
+            
+            // Remove lock from database
+            return database.ref('repairOrders/' + workOrderNumber).update({
+                lockedBy: null,
+                lockedByName: null,
+                lockHeartbeat: null,
+                lockedAt: null
+            }).then(() => {
+                // Cancel onDisconnect
+                database.ref('repairOrders/' + workOrderNumber + '/lockedBy').onDisconnect().cancel();
+                database.ref('repairOrders/' + workOrderNumber + '/lockedByName').onDisconnect().cancel();
+                database.ref('repairOrders/' + workOrderNumber + '/lockHeartbeat').onDisconnect().cancel();
+                database.ref('repairOrders/' + workOrderNumber + '/lockedAt').onDisconnect().cancel();
+                
+                currentLockStatus = 'unlocked';
+                currentEditingWorkOrder = null;
+                if (DEBUG_LOCK_MODE) console.log('✅ Lock released successfully');
+            }).catch(err => {
+                console.error('Error releasing lock:', err);
+            });
+        }
+        
+        // Start sending heartbeats
+        function startHeartbeat(workOrderNumber) {
+            stopHeartbeat(); // Clear any existing interval
+            
+            lockHeartbeatInterval = setInterval(() => {
+                database.ref('repairOrders/' + workOrderNumber + '/lockHeartbeat')
+                    .set(firebase.database.ServerValue.TIMESTAMP)
+                    .then(() => {
+                        if (DEBUG_LOCK_MODE) console.log('💓 Heartbeat sent');
+                    })
+                    .catch(err => {
+                        console.error('Heartbeat failed:', err);
+                        stopHeartbeat();
+                    });
+            }, HEARTBEAT_INTERVAL);
+            
+            if (DEBUG_LOCK_MODE) console.log('💓 Heartbeat started (every', HEARTBEAT_INTERVAL/1000, 'sec)');
+        }
+        
+        // Stop sending heartbeats
+        function stopHeartbeat() {
+            if (lockHeartbeatInterval) {
+                clearInterval(lockHeartbeatInterval);
+                lockHeartbeatInterval = null;
+                if (DEBUG_LOCK_MODE) console.log('💓 Heartbeat stopped');
+            }
+        }
+        
+        // Disable form (read-only mode)
+        function disableForm(lockedByName) {
+            currentLockStatus = 'locked-by-other';
+            
+            // Disable all inputs EXCEPT the dropdown (allow switching work orders)
+            document.querySelectorAll('.form-input').forEach(el => {
+                if (el.id !== 'entries-dropdown') {
+                    el.disabled = true;
+                    el.style.opacity = '0.5';
+                    el.style.cursor = 'not-allowed';
+                }
+            });
+            
+            // Disable checkboxes
+            document.querySelectorAll('input[type="checkbox"]').forEach(el => {
+                el.disabled = true;
+            });
+            
+            // Disable only Save and Update buttons (keep New and Print enabled)
+            document.querySelectorAll('.nav-item').forEach((btn, index) => {
+                if (index === 1 || index === 2) { // Disable Save (1) and Update (2) only
+                    btn.disabled = true;
+                    btn.style.opacity = '0.5';
+                    btn.style.pointerEvents = 'none';
+                }
+            });
+            
+            // Show lock message with force unlock option
+            showToast('� Locked by: ' + lockedByName + ' - Tap "Force Unlock" to override');
+            
+            // Show force unlock button
+            const forceUnlockBtn = document.getElementById('force-unlock-btn');
+            if (forceUnlockBtn) {
+                forceUnlockBtn.style.display = 'block';
+            }
+            
+            if (DEBUG_LOCK_MODE) console.log('� Form disabled - locked by:', lockedByName);
+        }
+        
+        // Enable form (editable mode)
+        function enableForm() {
+            currentLockStatus = 'locked-by-me';
+            
+            // Enable all inputs
+            document.querySelectorAll('.form-input').forEach(el => {
+                el.disabled = false;
+                el.style.opacity = '';
+                el.style.cursor = '';
+            });
+            
+            // Enable checkboxes
+            document.querySelectorAll('input[type="checkbox"]').forEach(el => {
+                el.disabled = false;
+            });
+            
+            // Enable nav buttons
+            document.querySelectorAll('.nav-item').forEach(btn => {
+                btn.disabled = false;
+                btn.style.opacity = '';
+                btn.style.pointerEvents = '';
+            });
+            
+            // Hide force unlock button
+            const forceUnlockBtn = document.getElementById('force-unlock-btn');
+            if (forceUnlockBtn) {
+                forceUnlockBtn.style.display = 'none';
+            }
+            
+            if (DEBUG_LOCK_MODE) console.log('✅ Form enabled - you have control');
+        }
+        
+        // Watch for lock changes on current work order
+        let lockWatcher = null;
+        function watchLockStatus(workOrderNumber) {
+            // Remove old watcher
+            if (lockWatcher && currentWatchingWorkOrder) {
+                database.ref('repairOrders/' + currentWatchingWorkOrder).off('value', lockWatcher);
+                if (DEBUG_LOCK_MODE) console.log('🛑 Stopped watching old work order:', currentWatchingWorkOrder);
+            }
+            
+            // Stop heartbeat for old work order (Edge fix)
+            stopHeartbeat();
+            
+            if (!workOrderNumber) {
+                currentWatchingWorkOrder = null;
+                return;
+            }
+            
+            // Track which work order we're watching (even in read-only mode)
+            currentWatchingWorkOrder = workOrderNumber;
+            
+            // Watch for lock changes
+            lockWatcher = database.ref('repairOrders/' + workOrderNumber).on('value', snapshot => {
+                const data = snapshot.val();
+                if (!data) return;
+                
+                // Edge fix: Ignore updates for work orders we're no longer watching
+                if (currentWatchingWorkOrder !== workOrderNumber) {
+                    if (DEBUG_LOCK_MODE) console.log('⏭️ Ignoring update for old WO:', workOrderNumber);
+                    return;
+                }
+                
+                // Check lock status
+                if (data.lockedBy && data.lockedBy !== myDeviceId) {
+                    // Check if lock is still valid
+                    const lockAge = Date.now() - (data.lockHeartbeat || data.lockedAt || 0);
+                    
+                    if (lockAge < LOCK_EXPIRY_TIME) {
+                        // Locked by someone else
+                        // BUT: Don't override if we think we have the lock (possible Firefox delay)
+                        if (currentLockStatus === 'locked-by-me') {
+                            console.warn('⚠️ Watcher sees different lock, but we think we have it. Re-checking...');
+                            // Double-check lock ownership
+                            database.ref('repairOrders/' + workOrderNumber + '/lockedBy').once('value').then(snap => {
+                                if (snap.val() !== myDeviceId) {
+                                    console.error('❌ Confirmed: Lost lock to another user');
+                                    disableForm(data.lockedByName || 'Another user');
+                                    showToast('⚠️ Lost lock to ' + (data.lockedByName || 'another user'));
+                                } else if (DEBUG_LOCK_MODE) {
+                                    console.log('✅ Confirmed: We still have the lock');
+                                }
+                            });
+                        } else if (currentLockStatus !== 'locked-by-other') {
+                            showToast('� ' + (data.lockedByName || 'Another user') + ' started editing');
+                            disableForm(data.lockedByName || 'Another user');
+                        }
+                    } else {
+                        // Lock expired - try to acquire it
+                        if (currentLockStatus === 'locked-by-other') {
+                            acquireLock(workOrderNumber).then(() => {
+                                currentEditingWorkOrder = workOrderNumber;
+                                currentLockStatus = 'locked-by-me';
+                                // Reload data to show changes made by other user
+                                loadWorkOrderData(data);
+                                enableForm(); // Must explicitly enable form
+                                showToast('✅ Work order unlocked - reloaded with latest changes');
+                            }).catch(err => {
+                                console.error('Failed to acquire expired lock:', err);
+                            });
+                        }
+                    }
+                } else if (!data.lockedBy && currentLockStatus === 'locked-by-other') {
+                    // Lock was released - try to acquire it and reload data
+                    acquireLock(workOrderNumber).then(() => {
+                        currentEditingWorkOrder = workOrderNumber;
+                        currentLockStatus = 'locked-by-me';
+                        // Reload data to show changes made by other user
+                        loadWorkOrderData(data);
+                        enableForm(); // Must explicitly enable form
+                        showToast('✅ Work order unlocked - reloaded with latest changes');
+                    }).catch(err => {
+                        console.error('Failed to acquire released lock:', err);
+                    });
+                }
+            });
         }
         
         // UI Functions
@@ -3004,14 +3334,25 @@
                 ...partsData  // Spread parts data into the work order
             };
             
-            database.ref('repairOrders/' + woNumber).set(workOrder)
-                .then(() => {
-                    showToast('✓ Work order saved!');
-                    loadPreviousEntries();
-                })
-                .catch((error) => {
-                    showToast('Error: ' + error.message);
-                });
+            // Get existing lock data if saving an existing work order
+            database.ref('repairOrders/' + woNumber).once('value').then(snapshot => {
+                const existingData = snapshot.val();
+                
+                // Preserve lock data if it exists and it's ours
+                if (existingData && existingData.lockedBy === myDeviceId) {
+                    workOrder.lockedBy = existingData.lockedBy;
+                    workOrder.lockedByName = existingData.lockedByName;
+                    workOrder.lockedAt = existingData.lockedAt;
+                    workOrder.lockHeartbeat = firebase.database.ServerValue.TIMESTAMP; // Update heartbeat
+                }
+                
+                return database.ref('repairOrders/' + woNumber).set(workOrder);
+            }).then(() => {
+                showToast('✓ Work order saved!');
+                loadPreviousEntries();
+            }).catch((error) => {
+                showToast('Error: ' + error.message);
+            });
         }
         
         // Parts Management
@@ -3095,10 +3436,40 @@
         // Clear Form
         async function clearForm() {
             if (confirm('Clear all fields?')) {
-                document.querySelectorAll('.form-input').forEach(input => input.value = '');
-                document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+                // Release lock on current work order
+                if (currentEditingWorkOrder) {
+                    await releaseLock(currentEditingWorkOrder);
+                }
+                
+                // Clear dropdown selection
+                const dropdown = document.getElementById('entries-dropdown');
+                if (dropdown) dropdown.value = '';
+                
+                // Firefox-compatible clearing: target ALL input types
+                document.querySelectorAll('input[type="text"], input[type="number"], input[type="tel"], input[type="email"]').forEach(input => {
+                    input.value = '';
+                });
+                
+                // Clear textareas
+                document.querySelectorAll('textarea').forEach(textarea => {
+                    textarea.value = '';
+                });
+                
+                // Clear contenteditable elements (Firefox requires both)
+                document.querySelectorAll('[contenteditable]').forEach(el => {
+                    el.textContent = '';
+                    el.innerHTML = '';
+                });
+                
+                // Clear all checkboxes
+                document.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                    cb.checked = false;
+                });
+                
+                // Clear parts list
                 document.getElementById('parts-list').innerHTML = '';
                 partCounter = 0;
+                
                 // Set today's date in MM/DD/YYYY format
                 const today = new Date();
                 const month = (today.getMonth() + 1).toString().padStart(2, '0');
@@ -3110,6 +3481,11 @@
                 const woNumber = await generateWorkOrderNumber();
                 const woField = document.getElementById('work_order_number');
                 if (woField) woField.value = woNumber;
+                
+                // Enable form for new work order
+                enableForm();
+                currentEditingWorkOrder = null;
+                currentWatchingWorkOrder = null;
                 
                 showToast('Form cleared');
             }
@@ -3207,93 +3583,188 @@
         }
         
         // Load selected entry
-        document.getElementById('entries-dropdown').addEventListener('change', function() {
-            if (!this.value) return;
+        document.getElementById('entries-dropdown').addEventListener('change', function(e) {
+            if (!this.value) {
+                // Clear selection - release lock and reset status
+                if (currentEditingWorkOrder) {
+                    releaseLock(currentEditingWorkOrder);
+                }
+                
+                // Stop watcher and heartbeat
+                if (lockWatcher && currentEditingWorkOrder) {
+                    database.ref('repairOrders/' + currentEditingWorkOrder).off('value', lockWatcher);
+                    lockWatcher = null;
+                }
+                stopHeartbeat();
+                
+                currentLockStatus = 'unlocked';
+                currentEditingWorkOrder = null;
+                currentWatchingWorkOrder = null;
+                
+                // Hide force unlock button
+                const forceUnlockBtn = document.getElementById('force-unlock-btn');
+                if (forceUnlockBtn) {
+                    forceUnlockBtn.style.display = 'none';
+                }
+                return;
+            }
             
-            database.ref('repairOrders/' + this.value).once('value', (snapshot) => {
+            const workOrderNumber = this.value;
+            
+            // Save state BEFORE stopping watcher
+            const previousWO = currentEditingWorkOrder;
+            const hadLock = currentLockStatus === 'locked-by-me';
+            
+            // Stop watching previous work order FIRST (critical for Firefox/Edge)
+            if (lockWatcher && previousWO) {
+                database.ref('repairOrders/' + previousWO).off('value', lockWatcher);
+                lockWatcher = null;
+                if (DEBUG_LOCK_MODE) console.log('🛑 Stopped watching previous WO:', previousWO);
+            }
+            stopHeartbeat(); // Stop heartbeat for old work order
+            
+            if (DEBUG_LOCK_MODE && previousWO) {
+                console.log(`🔄 Switching from WO ${previousWO} (hadLock: ${hadLock}) to ${workOrderNumber}`);
+            }
+            
+            // Reset state immediately (Edge: clear everything before new operations)
+            currentLockStatus = 'unlocked';
+            currentEditingWorkOrder = null;
+            
+            // Hide force unlock button
+            const forceUnlockBtn = document.getElementById('force-unlock-btn');
+            if (forceUnlockBtn) {
+                forceUnlockBtn.style.display = 'none';
+            }
+            
+            // Release lock ONLY if we had one and it's a different work order
+            const releasePromise = (hadLock && previousWO && previousWO !== workOrderNumber) 
+                ? releaseLock(previousWO).then(() => {
+                    if (DEBUG_LOCK_MODE) console.log('🔓 Released previous lock, waiting for propagation...');
+                    // Small delay to ensure Firebase has processed the release
+                    return new Promise(resolve => setTimeout(resolve, 100));
+                })
+                : Promise.resolve();
+            
+            // Check for force unlock (touch with 2 fingers or Ctrl+Shift+Click)
+            const forceUnlock = e.touches && e.touches.length >= 2 || (e.ctrlKey && e.shiftKey);
+            
+            // Wait for release to complete, then load work order
+            releasePromise.then(() => {
+                return database.ref('repairOrders/' + workOrderNumber).once('value');
+            }).then(snapshot => {
                 const data = snapshot.val();
                 if (!data) return;
                 
-                // Load using original format (input_*) names - map to mobile fields
-                const setValue = (mobileId, value) => {
-                    const el = document.getElementById(mobileId);
-                    if (el) el.value = value || '';
-                };
-                
-                // Load from original format
-                setValue('date', data.input_date || data.date);
-                setValue('customer_name', data.input_customer_name || data.customer_name);
-                setValue('input_address', data.input_address || data.address);
-                setValue('phone_number', data.phone_number);
-                setValue('work_order_number', data.input_ro || data.work_order_number);
-                setValue('vin_number', data.input_vin_number || data.vin_number);
-                setValue('mileage', data.input_odometer || data.mileage);
-                setValue('license_plate', data.input_plate_number || data.license_plate);
-                setValue('input_county', data.input_county || data.county);
-                setValue('brakes_lf', data.input_brakes_lf);
-                setValue('brakes_rf', data.input_brakes_rf);
-                setValue('brakes_lr', data.input_brakes_lr);
-                setValue('brakes_rr', data.input_brakes_rr);
-                setValue('tire_tread_lf', data.input_tire_tread_lf);
-                setValue('tire_tread_rf', data.input_tire_tread_rf);
-                setValue('tire_tread_lr', data.input_tire_tread_lr);
-                setValue('tire_tread_rr', data.input_tire_tread_rr);
-                setValue('services_performed', data.input_description_of_work || data.services_performed);
-                setValue('tech_name', data.input_tech || data.tech_name);
-                setValue('stock', data.input_stock_);
-                setValue('engine_size', data.input_engine_size);
-                setValue('tire_psi_front', data.input_tire_psi_front);
-                setValue('tire_psi_rear', data.input_tire_psi_rear);
-                setValue('inspection_number', data.input_new_s_i_number);
-                setValue('inspection_exp', data.input_new_s_i_exp);
-                setValue('inspection_date', data.input_new_s_i_date);
-                setValue('emissions_number', data.input_new_s_em_number);
-                setValue('emissions_date', data.input_new_state_em_date);
-                setValue('old_inspection_exp', data.input_old_s_i_exp_date);
-                setValue('old_inspection_miles', data.input_old_s_i_miles);
-                
-                // Load checkboxes
-                const setCheckbox = (id, value) => {
-                    const el = document.getElementById(id);
-                    if (el) el.checked = value || false;
-                };
-                setCheckbox('chk_cat', data.input_chk_cat);
-                setCheckbox('chk_fuel_rest', data.input_chk_fuel_rest);
-                setCheckbox('chk_pcv', data.input_chk_pcv);
-                setCheckbox('chk_egr', data.input_chk_egr);
-                setCheckbox('chk_air', data.input_chk_air);
-                setCheckbox('chk_evap', data.input_chk_evap);
-                
-                // Store parts data for printing (q1-q17, pn1-pn17)
-                window.currentPartsData = {};
-                for (let i = 1; i <= 17; i++) {
-                    window.currentPartsData['q' + i] = data['input_q' + i] || data['q' + i] || '';
-                    window.currentPartsData['pn' + i] = data['input_pn' + i] || data['pn' + i] || '';
-                }
-                
-                // Load parts into UI
-                loadPartsData(data);
-                
-                // Split year/make/model from original format
-                if (data.input_year_make_model_trim) {
-                    const parts = data.input_year_make_model_trim.split(' ');
-                    setValue('year', parts[0] || '');
-                    setValue('make', parts[1] || '');
-                    setValue('model', parts.slice(2).join(' ') || '');
-                } else {
-                    setValue('year', data.year);
-                    setValue('make', data.make);
-                    setValue('model', data.model);
-                }
-                
-                showToast('Entry loaded');
-                
-                // Don't auto-expand sections - keep user's current state
-                // Removed: document.querySelectorAll('.section-card').forEach(card => {
-                //     card.classList.add('expanded');
-                // });
+                // Try to acquire lock
+                return acquireLock(workOrderNumber, forceUnlock).then(() => {
+                    // Lock acquired successfully - NOW set current work order
+                    currentEditingWorkOrder = workOrderNumber;
+                    currentLockStatus = 'locked-by-me';
+                    
+                    // Load data in edit mode
+                    loadWorkOrderData(data);
+                    
+                    // Enable form explicitly
+                    enableForm();
+                    
+                    // Start watching (small delay for Edge to process state)
+                    setTimeout(() => watchLockStatus(workOrderNumber), 50);
+                    showToast('✅ Entry loaded - you can edit');
+                }).catch(err => {
+                    if (err.locked) {
+                        // Locked by someone else - load in read-only mode
+                        // State already cleared at start, so we're viewing without "owning" this WO
+                        // This prevents us from trying to release a lock we don't have
+                        
+                        loadWorkOrderData(data);
+                        disableForm(err.lockedBy);
+                        // Start watching (small delay for Edge to process state)
+                        setTimeout(() => watchLockStatus(workOrderNumber), 50);
+                        
+                        if (DEBUG_LOCK_MODE) console.log('📖 Viewing in read-only mode, not tracking as "current" WO');
+                    } else {
+                        console.error('Lock error:', err);
+                        showToast('Error loading entry');
+                    }
+                });
             });
         });
+        
+        // Helper function to load work order data
+        function loadWorkOrderData(data) {
+            // Load using original format (input_*) names - map to mobile fields
+            const setValue = (mobileId, value) => {
+                const el = document.getElementById(mobileId);
+                if (el) el.value = value || '';
+            };
+            
+            // Load from original format
+            setValue('date', data.input_date || data.date);
+            setValue('customer_name', data.input_customer_name || data.customer_name);
+            setValue('input_address', data.input_address || data.address);
+            setValue('phone_number', data.phone_number);
+            setValue('work_order_number', data.input_ro || data.work_order_number);
+            setValue('vin_number', data.input_vin_number || data.vin_number);
+            setValue('mileage', data.input_odometer || data.mileage);
+            setValue('license_plate', data.input_plate_number || data.license_plate);
+            setValue('input_county', data.input_county || data.county);
+            setValue('brakes_lf', data.input_brakes_lf);
+            setValue('brakes_rf', data.input_brakes_rf);
+            setValue('brakes_lr', data.input_brakes_lr);
+            setValue('brakes_rr', data.input_brakes_rr);
+            setValue('tire_tread_lf', data.input_tire_tread_lf);
+            setValue('tire_tread_rf', data.input_tire_tread_rf);
+            setValue('tire_tread_lr', data.input_tire_tread_lr);
+            setValue('tire_tread_rr', data.input_tire_tread_rr);
+            setValue('services_performed', data.input_description_of_work || data.services_performed);
+            setValue('tech_name', data.input_tech || data.tech_name);
+            setValue('stock', data.input_stock_);
+            setValue('engine_size', data.input_engine_size);
+            setValue('tire_psi_front', data.input_tire_psi_front);
+            setValue('tire_psi_rear', data.input_tire_psi_rear);
+            setValue('inspection_number', data.input_new_s_i_number);
+            setValue('inspection_exp', data.input_new_s_i_exp);
+            setValue('inspection_date', data.input_new_s_i_date);
+            setValue('emissions_number', data.input_new_s_em_number);
+            setValue('emissions_date', data.input_new_state_em_date);
+            setValue('old_inspection_exp', data.input_old_s_i_exp_date);
+            setValue('old_inspection_miles', data.input_old_s_i_miles);
+            
+            // Load checkboxes
+            const setCheckbox = (id, value) => {
+                const el = document.getElementById(id);
+                if (el) el.checked = value || false;
+            };
+            setCheckbox('chk_cat', data.input_chk_cat);
+            setCheckbox('chk_fuel_rest', data.input_chk_fuel_rest);
+            setCheckbox('chk_pcv', data.input_chk_pcv);
+            setCheckbox('chk_egr', data.input_chk_egr);
+            setCheckbox('chk_air', data.input_chk_air);
+            setCheckbox('chk_evap', data.input_chk_evap);
+            
+            // Store parts data for printing (q1-q17, pn1-pn17)
+            window.currentPartsData = {};
+            for (let i = 1; i <= 17; i++) {
+                window.currentPartsData['q' + i] = data['input_q' + i] || data['q' + i] || '';
+                window.currentPartsData['pn' + i] = data['input_pn' + i] || data['pn' + i] || '';
+            }
+            
+            // Load parts into UI
+            loadPartsData(data);
+            
+            // Split year/make/model from original format
+            if (data.input_year_make_model_trim) {
+                const parts = data.input_year_make_model_trim.split(' ');
+                setValue('year', parts[0] || '');
+                setValue('make', parts[1] || '');
+                setValue('model', parts.slice(2).join(' ') || '');
+            } else {
+                setValue('year', data.year);
+                setValue('make', data.make);
+                setValue('model', data.model);
+            }
+        }
         
         // Search entries (ignores special characters)
         document.getElementById('entry-search').addEventListener('input', function() {
@@ -3307,6 +3778,36 @@
         
         // Initialize
         document.addEventListener('DOMContentLoaded', async function() {
+            // Firefox form clearing on page load/refresh
+            // Clear all inputs (Firefox caches form values)
+            document.querySelectorAll('input[type="text"], input[type="number"], input[type="tel"], input[type="email"]').forEach(input => {
+                // Don't clear dropdown
+                if (input.id !== 'entries-dropdown') {
+                    input.value = '';
+                }
+            });
+            
+            // Clear textareas
+            document.querySelectorAll('textarea').forEach(textarea => {
+                textarea.value = '';
+            });
+            
+            // Clear contenteditable elements
+            document.querySelectorAll('[contenteditable]').forEach(el => {
+                el.textContent = '';
+                el.innerHTML = '';
+            });
+            
+            // Clear checkboxes
+            document.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                cb.checked = false;
+            });
+            
+            // Clear parts list
+            const partsList = document.getElementById('parts-list');
+            if (partsList) partsList.innerHTML = '';
+            partCounter = 0;
+            
             // Set today's date in MM/DD/YYYY format
             const today = new Date();
             const month = (today.getMonth() + 1).toString().padStart(2, '0');
@@ -3316,13 +3817,83 @@
             
             // Auto-generate work order number on page load
             const woField = document.getElementById('work_order_number');
-            if (woField && !woField.value) {
-                const woNumber = await generateWorkOrderNumber();
-                woField.value = woNumber;
-            }
+            const woNumber = await generateWorkOrderNumber();
+            if (woField) woField.value = woNumber;
             
             loadPreviousEntries();
             showToast('Welcome! 📱');
+            
+            // Force unlock button handler
+            // Force unlock handler function
+            const handleForceUnlock = function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                console.log('🔐 Force unlock button triggered');
+                console.log('currentWatchingWorkOrder:', currentWatchingWorkOrder);
+                console.log('currentEditingWorkOrder:', currentEditingWorkOrder);
+                
+                // Use currentWatchingWorkOrder (set even in read-only) instead of currentEditingWorkOrder
+                const woNumber = currentWatchingWorkOrder || currentEditingWorkOrder;
+                
+                if (!woNumber) {
+                    console.error('❌ No work order number available for force unlock');
+                    showToast('No work order selected');
+                    return;
+                }
+                
+                if (DEBUG_LOCK_MODE) console.log('🔐 Force unlock requested for WO:', woNumber);
+                
+                if (confirm('Force unlock this work order? This will override the current lock.')) {
+                    // Force acquire lock
+                    acquireLock(woNumber, true).then(() => {
+                        // acquireLock already set currentEditingWorkOrder and currentLockStatus
+                        // Just enable the form UI
+                        enableForm();
+                        showToast('✅ Lock overridden - you can now edit');
+                        if (DEBUG_LOCK_MODE) console.log('✅ Force unlock successful');
+                    }).catch(err => {
+                        console.error('Force unlock failed:', err);
+                        showToast('Failed to unlock: ' + (err.message || err));
+                    });
+                }
+            };
+            
+            // Add comprehensive event handlers for mobile and desktop compatibility
+            const forceUnlockBtn = document.getElementById('force-unlock-btn');
+            if (!forceUnlockBtn) {
+                console.error('❌ Force unlock button not found in DOM!');
+            } else {
+                console.log('✅ Force unlock button found, adding event listeners');
+                
+                // Track if touch was used to prevent double-firing on mobile
+                let touchHandled = false;
+                
+                // Touch events for mobile/tablet
+                forceUnlockBtn.addEventListener('touchstart', function(e) {
+                    console.log('👆 Touch start detected');
+                    touchHandled = false;
+                }, { passive: true });
+                
+                forceUnlockBtn.addEventListener('touchend', function(e) {
+                    console.log('👆 Touch end detected');
+                    touchHandled = true;
+                    handleForceUnlock(e);
+                }, { passive: false });
+                
+                // Click event for desktop (and as fallback)
+                forceUnlockBtn.addEventListener('click', function(e) {
+                    console.log('🖱️ Click detected, touchHandled:', touchHandled);
+                    // Only handle click if touch wasn't used (prevents double-trigger)
+                    if (!touchHandled) {
+                        handleForceUnlock(e);
+                    }
+                    // Reset flag after a short delay
+                    setTimeout(() => { touchHandled = false; }, 500);
+                });
+                
+                console.log('✅ Touch and click event listeners added to force unlock button');
+            }
             
             // Double-tap back button to exit - works always, not just when fields filled
             let backPressedOnce = false;
@@ -3455,6 +4026,50 @@
                     
                     e.target.value = formatted;
                 });
+            }
+        });
+        
+        // --- LOCK CLEANUP HANDLERS ---
+        
+        // Release lock when browser closes (multiple events for Firefox compatibility)
+        const releaseOnClose = function() {
+            if (currentEditingWorkOrder && currentLockStatus === 'locked-by-me') {
+                // Synchronous release attempt (may not complete, but onDisconnect handles it)
+                releaseLock(currentEditingWorkOrder);
+                if (DEBUG_LOCK_MODE) console.log('🚪 Browser closing - releasing lock');
+            }
+        };
+        
+        window.addEventListener('beforeunload', releaseOnClose);
+        // pagehide is more reliable in Firefox and iOS Safari than beforeunload
+        window.addEventListener('pagehide', releaseOnClose);
+        
+        // Pause/resume heartbeat when app visibility changes (important for mobile battery)
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                // App backgrounded - stop heartbeat to save battery
+                // Lock will expire after 90 seconds if app stays backgrounded
+                if (currentEditingWorkOrder && currentLockStatus === 'locked-by-me') {
+                    stopHeartbeat();
+                    if (DEBUG_LOCK_MODE) console.log('📱 App backgrounded - heartbeat paused (lock will expire in 90s)');
+                }
+            } else {
+                // App foregrounded - check if we still have the lock
+                if (currentEditingWorkOrder && currentLockStatus === 'locked-by-me') {
+                    // Verify lock is still ours before resuming heartbeat
+                    database.ref('repairOrders/' + currentEditingWorkOrder + '/lockedBy').once('value').then(snapshot => {
+                        const lockedBy = snapshot.val();
+                        if (lockedBy === myDeviceId) {
+                            // Still ours - resume heartbeat
+                            startHeartbeat(currentEditingWorkOrder);
+                            if (DEBUG_LOCK_MODE) console.log('📱 App foregrounded - heartbeat resumed');
+                        } else {
+                            // Lost the lock while backgrounded
+                            currentLockStatus = 'unlocked';
+                            if (DEBUG_LOCK_MODE) console.log('⚠️ Lost lock while app was backgrounded');
+                        }
+                    });
+                }
             }
         });
     </script>
