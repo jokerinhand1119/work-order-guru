@@ -1861,6 +1861,7 @@
         // Enable form (editable mode)
         function enableForm() {
             currentLockStatus = 'locked-by-me';
+            trackActiveLock(); // Track lock in sessionStorage
             
             // Enable all inputs
             document.querySelectorAll('.form-input').forEach(el => {
@@ -3671,6 +3672,7 @@
             // Reset state immediately (Edge: clear everything before new operations)
             currentLockStatus = 'unlocked';
             currentEditingWorkOrder = null;
+            trackActiveLock(); // Clear lock tracking
             
             // Hide force unlock button
             const forceUnlockBtn = document.getElementById('force-unlock-btn');
@@ -4072,11 +4074,50 @@
         
         // --- LOCK CLEANUP HANDLERS ---
         
+        // Track active lock in sessionStorage for cleanup on refresh
+        function trackActiveLock() {
+            if (currentEditingWorkOrder && currentLockStatus === 'locked-by-me') {
+                sessionStorage.setItem('activeLock_' + myDeviceId, JSON.stringify({
+                    workOrder: currentEditingWorkOrder,
+                    timestamp: Date.now()
+                }));
+            } else {
+                sessionStorage.removeItem('activeLock_' + myDeviceId);
+            }
+        }
+        
+        // Clean up any lock from previous page session (handles refresh/crash)
+        function cleanupPreviousLock() {
+            const storageKey = 'activeLock_' + myDeviceId;
+            const activeLock = sessionStorage.getItem(storageKey);
+            if (activeLock) {
+                try {
+                    const lockData = JSON.parse(activeLock);
+                    // Clean up lock from previous session (less than 10 minutes old to be safe)
+                    if (lockData.workOrder && (Date.now() - lockData.timestamp) < 600000) {
+                        if (DEBUG_LOCK_MODE) console.log('🧹 Cleaning up lock from previous session:', lockData.workOrder);
+                        // Release the lock immediately
+                        database.ref('repairOrders/' + lockData.workOrder + '/lockedBy').remove();
+                        database.ref('repairOrders/' + lockData.workOrder + '/lockedByName').remove();
+                        database.ref('repairOrders/' + lockData.workOrder + '/lockHeartbeat').remove();
+                        database.ref('repairOrders/' + lockData.workOrder + '/lockedAt').remove();
+                    }
+                } catch (e) {
+                    console.error('Error cleaning up previous lock:', e);
+                }
+                sessionStorage.removeItem(storageKey);
+            }
+        }
+        
+        // Run cleanup immediately on page load
+        setTimeout(() => cleanupPreviousLock(), 1000);
+        
         // Release lock when browser closes (multiple events for Firefox compatibility)
         const releaseOnClose = function() {
             if (currentEditingWorkOrder && currentLockStatus === 'locked-by-me') {
                 // Synchronous release attempt (may not complete, but onDisconnect handles it)
                 releaseLock(currentEditingWorkOrder);
+                sessionStorage.removeItem('activeLock_' + myDeviceId);
                 if (DEBUG_LOCK_MODE) console.log('🚪 Browser closing - releasing lock');
             }
         };
