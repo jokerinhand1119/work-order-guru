@@ -153,6 +153,24 @@
             background: linear-gradient(135deg, #ff6f00 0%, #ff9800 100%);
             box-shadow: 0 4px 12px rgba(255, 152, 0, 0.6);
         }
+        
+        /* Ensure text selection works properly (Firefox/Edge fix) */
+        input, textarea, [contenteditable] {
+            -webkit-user-select: text;
+            -moz-user-select: text;
+            -ms-user-select: text;
+            user-select: text;
+        }
+        
+        /* Prevent blur events from clearing selection */
+        input::selection, textarea::selection, [contenteditable]::selection {
+            background: #0078d4;
+            color: white;
+        }
+        input::-moz-selection, textarea::-moz-selection, [contenteditable]::-moz-selection {
+            background: #0078d4;
+            color: white;
+        }
         #force-unlock-btn.visible {
             display: inline-block;
         }
@@ -1378,6 +1396,67 @@
         let scanMode = 'barcode'; // 'barcode' or 'text'
         let textDetectorSupported = false;
         
+        // Preserve text selection ONLY when Ctrl key is held (Firefox/Edge fix)
+        // This prevents interference with normal app functions
+        let savedSelectionRange = null;
+        let ctrlKeyHeld = false;
+        
+        // Track Ctrl key state
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey || e.metaKey) {
+                ctrlKeyHeld = true;
+            }
+        });
+        
+        document.addEventListener('keyup', function(e) {
+            if (!e.ctrlKey && !e.metaKey) {
+                ctrlKeyHeld = false;
+            }
+        });
+        
+        // Only save selection when Ctrl is held (user intends to copy)
+        document.addEventListener('selectionchange', function() {
+            if (ctrlKeyHeld) {
+                const selection = window.getSelection();
+                const selectedText = selection.toString();
+                
+                if (selectedText.length > 0) {
+                    try {
+                        const target = document.activeElement;
+                        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+                            // Save input field selection
+                            savedSelectionRange = {
+                                element: target,
+                                start: target.selectionStart,
+                                end: target.selectionEnd
+                            };
+                        }
+                    } catch (e) {
+                        // Ignore errors
+                    }
+                }
+            }
+        });
+        
+        // Restore selection if it gets cleared while Ctrl is held
+        document.addEventListener('mouseup', function(e) {
+            if (ctrlKeyHeld && savedSelectionRange) {
+                const target = e.target;
+                if (target === savedSelectionRange.element) {
+                    setTimeout(() => {
+                        try {
+                            target.setSelectionRange(savedSelectionRange.start, savedSelectionRange.end);
+                        } catch (e) {
+                            // Ignore
+                        }
+                    }, 0);
+                }
+            } else {
+                // Normal operation - clear saved selection
+                savedSelectionRange = null;
+            }
+        });
+        
         async function startScanner() {
             const overlay = document.getElementById('scanner-overlay');
             overlay.classList.add('active');
@@ -2518,6 +2597,15 @@
         const vinInputHidden = document.getElementById('input_vin_number');
 
         function updateVinHighlight() {
+            // Check if user has text selected - if so, don't mess with it
+            const sel = window.getSelection();
+            const hasSelection = sel.toString().length > 0;
+            
+            if (hasSelection) {
+                // User is selecting text, don't update highlight or move cursor
+                return;
+            }
+            
             let value = vinEditable.textContent.toUpperCase();
             vinInputHidden.value = value;
             if (value.length > 8) {
@@ -2528,7 +2616,6 @@
             }
             // Move caret to end
             const range = document.createRange();
-            const sel = window.getSelection();
             range.selectNodeContents(vinEditable);
             range.collapse(false);
             sel.removeAllRanges();
@@ -2906,6 +2993,7 @@ function acquireLock(workOrderNumber, forceOverride = false) {
             startHeartbeat(workOrderNumber);
             
             currentLockStatus = 'locked-by-me';
+            trackActiveLock(); // Track lock in sessionStorage for refresh cleanup
             if (DEBUG_LOCK_MODE) console.log('✅ Lock acquired successfully for WO:', workOrderNumber);
             
             // Don't call enableForm here - let the caller handle UI
@@ -2939,6 +3027,7 @@ function releaseLock(workOrderNumber) {
         db.ref('repairOrders/' + workOrderNumber + '/lockedAt').onDisconnect().cancel();
         
         currentLockStatus = 'unlocked';
+        trackActiveLock(); // Clear lock tracking in sessionStorage
         if (DEBUG_LOCK_MODE) console.log('✅ Lock released successfully');
     }).catch(err => {
         console.error('Error releasing lock:', err);
@@ -3822,11 +3911,50 @@ newOrderBtn.addEventListener('click', async function() {
     setTimeout(function() { document.getElementById('save-status').textContent = ''; }, 3000);
 });
 
+// Track active lock in sessionStorage for cleanup on refresh
+function trackActiveLock() {
+    if (currentWorkOrderNumber && currentLockStatus === 'locked-by-me') {
+        sessionStorage.setItem('activeLock_' + myDeviceId, JSON.stringify({
+            workOrder: currentWorkOrderNumber,
+            timestamp: Date.now()
+        }));
+    } else {
+        sessionStorage.removeItem('activeLock_' + myDeviceId);
+    }
+}
+
+// Clean up any lock from previous page session (handles refresh/crash)
+function cleanupPreviousLock() {
+    const storageKey = 'activeLock_' + myDeviceId;
+    const activeLock = sessionStorage.getItem(storageKey);
+    if (activeLock) {
+        try {
+            const lockData = JSON.parse(activeLock);
+            // Clean up lock from previous session (less than 10 minutes old to be safe)
+            if (lockData.workOrder && (Date.now() - lockData.timestamp) < 600000) {
+                if (DEBUG_LOCK_MODE) console.log('🧹 Cleaning up lock from previous session:', lockData.workOrder);
+                // Release the lock immediately
+                db.ref('repairOrders/' + lockData.workOrder + '/lockedBy').remove();
+                db.ref('repairOrders/' + lockData.workOrder + '/lockedByName').remove();
+                db.ref('repairOrders/' + lockData.workOrder + '/lockHeartbeat').remove();
+                db.ref('repairOrders/' + lockData.workOrder + '/lockedAt').remove();
+            }
+        } catch (e) {
+            console.error('Error cleaning up previous lock:', e);
+        }
+        sessionStorage.removeItem(storageKey);
+    }
+}
+
+// Run cleanup immediately on page load
+setTimeout(() => cleanupPreviousLock(), 1000);
+
 // Release lock when browser closes (multiple events for cross-browser compatibility)
 const releaseOnClose = function(e) {
     if (currentWorkOrderNumber && currentLockStatus === 'locked-by-me') {
         // Synchronous release attempt
         releaseLock(currentWorkOrderNumber);
+        sessionStorage.removeItem('activeLock_' + myDeviceId);
         if (DEBUG_LOCK_MODE) console.log('🚪 Browser closing - releasing lock');
     }
 };
