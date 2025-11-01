@@ -1158,6 +1158,9 @@
                     <div class="form-group">
                         <button class="form-input" style="background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%); color: white; font-weight: 700; cursor: pointer; border: none; box-shadow: 0 4px 16px rgba(33, 150, 243, 0.3); transition: all 0.3s; font-size: 16px;" onclick="openIDENTIFIX()" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(33, 150, 243, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 16px rgba(33, 150, 243, 0.3)'">🔧 Lookup in IDENTIFIX</button>
                     </div>
+                    <div class="form-group">
+                        <button class="form-input" style="background: linear-gradient(135deg, #FF6B35 0%, #F7931E 100%); color: white; font-weight: 700; cursor: pointer; border: none; box-shadow: 0 4px 16px rgba(255, 107, 53, 0.3); transition: all 0.3s; font-size: 16px;" onclick="openFuseboxDiagram()" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(255, 107, 53, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 16px rgba(255, 107, 53, 0.3)'">⚡ Fusebox Diagram</button>
+                    </div>
                     <div class="form-row">
                         <div class="form-group">
                             <label class="form-label">Year</label>
@@ -2277,6 +2280,44 @@
             } else {
                 showToast('Opening IDENTIFIX login...');
             }
+        }
+        
+        // Open Fusebox Diagram on StartMyCar.com
+        function openFuseboxDiagram() {
+            // Get year, make, model from separate fields (mobile version)
+            const year = document.getElementById('year')?.value.trim() || '';
+            let make = document.getElementById('make')?.value.trim() || '';
+            let model = document.getElementById('model')?.value.trim() || '';
+            
+            if (!year || !make || !model) {
+                showToast('Please enter Year, Make, and Model first');
+                return;
+            }
+            
+            // Map common abbreviations to full manufacturer names
+            const makeMapping = {
+                'chevy': 'chevrolet',
+                'vw': 'volkswagen',
+                'benz': 'mercedes-benz',
+                'merc': 'mercury',
+                'cad': 'cadillac',
+                'bimmer': 'bmw'
+            };
+            
+            // Remove trim/engine info - only keep base model number/name
+            // Example: "2500 ST" -> "2500", "F-250 XL" -> "f-250"
+            model = model.split(' ')[0]; // Take only first word/number
+            
+            // Build StartMyCar.com fusebox diagram URL
+            // Format: https://www.startmycar.com/us/[make]/[model]/info/fusebox/[year]
+            const makeLower = make.toLowerCase();
+            const makeFormatted = (makeMapping[makeLower] || makeLower).replace(/\s+/g, '-');
+            const modelFormatted = model.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+            const fuseboxURL = `https://www.startmycar.com/us/${makeFormatted}/${modelFormatted}/info/fusebox/${year}`;
+            
+            // Open in new tab
+            window.open(fuseboxURL, '_blank');
+            showToast(`Opening fusebox diagram for ${year} ${make} ${model}`);
         }
         
         // Call Customer
