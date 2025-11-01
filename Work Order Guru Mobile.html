@@ -1161,6 +1161,13 @@
                     <div class="form-group">
                         <button class="form-input" style="background: linear-gradient(135deg, #FF6B35 0%, #F7931E 100%); color: white; font-weight: 700; cursor: pointer; border: none; box-shadow: 0 4px 16px rgba(255, 107, 53, 0.3); transition: all 0.3s; font-size: 16px;" onclick="openFuseboxDiagram()" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(255, 107, 53, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 16px rgba(255, 107, 53, 0.3)'">⚡ Fusebox Diagram</button>
                     </div>
+                    <div class="form-group">
+                        <label class="form-label">🎥 YouTube How-To Search</label>
+                        <div class="form-input-group" style="position: relative;">
+                            <input type="text" class="form-input" id="youtube-search" placeholder="Type repair topic (e.g., change headlight bulb)" style="padding-right: 50px;">
+                            <button class="input-icon" onclick="searchYouTube()" style="background: linear-gradient(135deg, #FF0000 0%, #CC0000 100%); color: white; border: none; font-size: 20px; width: 44px; height: 44px; border-radius: 12px; box-shadow: 0 4px 12px rgba(255, 0, 0, 0.4); cursor: pointer;">▶️</button>
+                        </div>
+                    </div>
                     <div class="form-row">
                         <div class="form-group">
                             <label class="form-label">Year</label>
@@ -2300,6 +2307,56 @@
                 showToast('Opening IDENTIFIX login...');
             }
         }
+        
+        // YouTube How-To Search
+        function searchYouTube() {
+            const year = document.getElementById('year')?.value.trim() || '';
+            const make = document.getElementById('make')?.value.trim() || '';
+            const model = document.getElementById('model')?.value.trim() || '';
+            const searchInput = document.getElementById('youtube-search')?.value.trim() || '';
+            
+            if (!year || !make || !model) {
+                showToast('Please enter Year, Make, and Model first');
+                return;
+            }
+            
+            // Build search query: "2019 Ford F-250 how to [user input]"
+            const searchQuery = `${year} ${make} ${model} how to ${searchInput}`.trim();
+            const encodedQuery = encodeURIComponent(searchQuery);
+            const youtubeURL = `https://www.youtube.com/results?search_query=${encodedQuery}`;
+            
+            // Open in new tab
+            window.open(youtubeURL, '_blank');
+            showToast(`Searching YouTube for: ${searchQuery}`);
+        }
+        
+        // Auto-fill YouTube search field when year/make/model changes
+        document.addEventListener('DOMContentLoaded', function() {
+            const yearField = document.getElementById('year');
+            const makeField = document.getElementById('make');
+            const modelField = document.getElementById('model');
+            const youtubeSearch = document.getElementById('youtube-search');
+            
+            function updateYouTubePrefix() {
+                if (youtubeSearch && yearField && makeField && modelField) {
+                    const year = yearField.value.trim();
+                    const make = makeField.value.trim();
+                    const model = modelField.value.trim();
+                    
+                    if (year && make && model) {
+                        // Only update if field is empty or still has old prefix
+                        const currentValue = youtubeSearch.value;
+                        if (!currentValue || currentValue.startsWith(year.substring(0, 2)) || !currentValue.includes('how to')) {
+                            youtubeSearch.placeholder = `${year} ${make} ${model} how to...`;
+                        }
+                    }
+                }
+            }
+            
+            if (yearField) yearField.addEventListener('change', updateYouTubePrefix);
+            if (makeField) makeField.addEventListener('change', updateYouTubePrefix);
+            if (modelField) modelField.addEventListener('change', updateYouTubePrefix);
+        });
         
         // Open Fusebox Diagram on StartMyCar.com
         function openFuseboxDiagram() {
