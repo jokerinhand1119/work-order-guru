@@ -2009,11 +2009,29 @@
             
             try {
                 const isAndroid = /Android/i.test(navigator.userAgent);
+                const isFireTablet = /KFOT|KFTT|KFJWI|KFJWA|KFSOWI|KFTHWI|KFTHWA|KFAPWI|KFAPWA|WFJWAE|KFARWI|KFASWI|KFSAWI|KFSAWA/i.test(navigator.userAgent);
+                
+                // Adaptive resolution based on device
+                let videoWidth, videoHeight;
+                if (isFireTablet) {
+                    // Fire tablets: Lower resolution for better compatibility
+                    videoWidth = 640;
+                    videoHeight = 480;
+                } else if (isAndroid) {
+                    // Other Android: Medium resolution
+                    videoWidth = 1280;
+                    videoHeight = 720;
+                } else {
+                    // iOS/newer devices: High resolution
+                    videoWidth = 1920;
+                    videoHeight = 1080;
+                }
+                
                 videoStream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         facingMode: 'environment',
-                        width: { ideal: isAndroid ? 1280 : 1920 },
-                        height: { ideal: isAndroid ? 720 : 1080 }
+                        width: { ideal: videoWidth, min: 640 },
+                        height: { ideal: videoHeight, min: 480 }
                     }
                 });
                 
