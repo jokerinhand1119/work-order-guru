@@ -123,6 +123,39 @@
             background-color: #dc3545; /* Red for disconnected */
             color: white;
         }
+        
+        /* Lock status indicator */
+        #save-status.locked-readonly {
+            background: linear-gradient(135deg, #ff4757 0%, #ff6b7a 100%);
+            color: white !important;
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-weight: 600;
+            box-shadow: 0 2px 8px rgba(255, 71, 87, 0.3);
+        }
+        
+        /* Force unlock button */
+        #force-unlock-btn {
+            display: none;
+            background: linear-gradient(135deg, #ff9800 0%, #ff6f00 100%);
+            color: white;
+            border: none;
+            padding: 6px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-left: 8px;
+            box-shadow: 0 2px 8px rgba(255, 152, 0, 0.4);
+            transition: all 0.3s;
+        }
+        #force-unlock-btn:hover {
+            background: linear-gradient(135deg, #ff6f00 0%, #ff9800 100%);
+            box-shadow: 0 4px 12px rgba(255, 152, 0, 0.6);
+        }
+        #force-unlock-btn.visible {
+            display: inline-block;
+        }
 
         #bottom-bar {
             position: fixed;
@@ -764,6 +797,11 @@
                 color: #00ff88 !important;
                 font-size: 12px;
             }
+            #force-unlock-btn {
+                display: block;
+                width: 100%;
+                margin-top: 8px;
+            }
         }
         
         /* Android-Specific Performance Optimizations (Desktop unaffected) */
@@ -1234,6 +1272,7 @@
   <button id="new-order-btn" class="btn-professional" style="display:none;">New Order (Same Customer)</button>
   <button id="print-btn" class="btn-professional">Print</button>
   <span id="save-status" style="margin-left:16px;font-size:14px;color:#00ff88;"></span>
+  <button id="force-unlock-btn" title="Force unlock this work order">⚠️ Force Unlock</button>
 </div>
 
     <script>
@@ -2433,14 +2472,36 @@
             const database = firebase.database();
             const statusElement = document.getElementById('firebase-status');
 
+            // Monitor connection state - especially important for Firefox
             const connectedRef = database.ref('.info/connected');
             connectedRef.on('value', (snap) => {
                 if (snap.val() === true) {
                     statusElement.textContent = 'Firebase Connected';
                     statusElement.className = 'connected';
+                    
+                    // Re-verify lock status when reconnecting (Firefox fix)
+                    if (currentWorkOrderNumber && currentLockStatus === 'locked-by-me') {
+                        database.ref('repairOrders/' + currentWorkOrderNumber + '/lockedBy').once('value').then(snapshot => {
+                            const lockedBy = snapshot.val();
+                            if (lockedBy !== myDeviceId) {
+                                console.warn('⚠️ Lost lock during disconnect');
+                                currentLockStatus = 'unlocked';
+                                currentWorkOrderNumber = null;
+                                disableForm('Connection lost');
+                            } else if (DEBUG_LOCK_MODE) {
+                                console.log('✅ Lock still valid after reconnect');
+                            }
+                        });
+                    }
                 } else {
                     statusElement.textContent = 'Firebase Disconnected';
                     statusElement.className = 'disconnected';
+                    
+                    // Stop heartbeat during disconnect
+                    if (currentWorkOrderNumber && currentLockStatus === 'locked-by-me') {
+                        stopHeartbeat();
+                        if (DEBUG_LOCK_MODE) console.log('🔌 Disconnected - heartbeat stopped');
+                    }
                 }
             });
         } catch (e) {
@@ -2752,10 +2813,37 @@ const deleteEntryBtn = document.getElementById('delete-entry-btn');
 const newOrderBtn = document.getElementById('new-order-btn');
 let entriesCache = {};
 let currentEditKey = null;
-let currentWorkOrderNumber = null; // Track work order number for persistent updates
+let currentWorkOrderNumber = null; // Only set when we have the lock
+let currentWatchingWorkOrder = null; // Track which WO we're watching (even in read-only)
 let lastZipUsedForCounty = ''; // Track ZIP code for smart county updates
 let currentWorkOrderListener = null; // Firebase listener for current work order
 let lastKnownTimestamp = null; // Track last timestamp to detect updates
+
+// --- LOCK SYSTEM ---
+const DEBUG_LOCK_MODE = true; // Set to false in production
+const LOCK_TIMEOUT = DEBUG_LOCK_MODE ? 60000 : 900000; // 1 min (debug) or 15 min (production)
+const HEARTBEAT_INTERVAL = 30000; // 30 seconds
+const LOCK_EXPIRY_TIME = 90000; // 90 seconds - lock expires if no heartbeat
+
+let myDeviceId = localStorage.getItem('deviceId');
+let myDeviceName = localStorage.getItem('deviceName');
+let lockHeartbeatInterval = null;
+let currentLockStatus = null; // 'locked-by-me', 'locked-by-other', 'unlocked'
+
+// Generate unique device ID on first run
+if (!myDeviceId) {
+    myDeviceId = 'device_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+    localStorage.setItem('deviceId', myDeviceId);
+    if (DEBUG_LOCK_MODE) console.log('🆔 Generated device ID:', myDeviceId);
+}
+
+// Prompt for device name on first run
+if (!myDeviceName) {
+    myDeviceName = prompt('Enter a name for this device (e.g., "Front Desk Computer", "Shop Tablet"):') || 'Unknown Device';
+    localStorage.setItem('deviceName', myDeviceName);
+}
+
+if (DEBUG_LOCK_MODE) console.log('🔧 Device initialized:', myDeviceName, '(' + myDeviceId + ')');
 
 // Auto-fill date field with current date on page load
 function setCurrentDate() {
@@ -2770,13 +2858,218 @@ function setCurrentDate() {
 }
 
 // Track field changes for smart merging
+// --- LOCK MANAGEMENT FUNCTIONS ---
+
+// Acquire lock for a work order
+function acquireLock(workOrderNumber, forceOverride = false) {
+    if (!workOrderNumber) return Promise.reject('No work order number');
+    
+    if (DEBUG_LOCK_MODE) console.log('🔒 Attempting to acquire lock for:', workOrderNumber);
+    
+    return db.ref('repairOrders/' + workOrderNumber).once('value').then(snapshot => {
+        const data = snapshot.val();
+        if (!data) return Promise.reject('Work order not found');
+        
+        // Check if already locked by someone else
+        if (data.lockedBy && data.lockedBy !== myDeviceId && !forceOverride) {
+            // Check if lock is stale (no heartbeat)
+            const lockAge = Date.now() - (data.lockHeartbeat || data.lockedAt || 0);
+            
+            if (lockAge < LOCK_EXPIRY_TIME) {
+                // Lock is fresh - cannot acquire
+                if (DEBUG_LOCK_MODE) console.log('🔒 Lock held by:', data.lockedByName, '(age:', Math.round(lockAge/1000), 'sec)');
+                return Promise.reject({ 
+                    locked: true, 
+                    lockedBy: data.lockedByName || 'Another device',
+                    lockAge: lockAge
+                });
+            } else {
+                // Lock is stale - can take over
+                if (DEBUG_LOCK_MODE) console.log('☠️ Lock expired (age:', Math.round(lockAge/1000), 'sec) - taking over');
+            }
+        }
+        
+        // Acquire lock - ONLY update lock fields
+        return db.ref('repairOrders/' + workOrderNumber).update({
+            lockedBy: myDeviceId,
+            lockedByName: myDeviceName,
+            lockedAt: firebase.database.ServerValue.TIMESTAMP,
+            lockHeartbeat: firebase.database.ServerValue.TIMESTAMP
+        }).then(() => {
+            // Set up auto-release on disconnect
+            db.ref('repairOrders/' + workOrderNumber + '/lockedBy').onDisconnect().remove();
+            db.ref('repairOrders/' + workOrderNumber + '/lockedByName').onDisconnect().remove();
+            db.ref('repairOrders/' + workOrderNumber + '/lockHeartbeat').onDisconnect().remove();
+            db.ref('repairOrders/' + workOrderNumber + '/lockedAt').onDisconnect().remove();
+            
+            // Start heartbeat
+            startHeartbeat(workOrderNumber);
+            
+            currentLockStatus = 'locked-by-me';
+            if (DEBUG_LOCK_MODE) console.log('✅ Lock acquired successfully for WO:', workOrderNumber);
+            
+            // Don't call enableForm here - let the caller handle UI
+            // This prevents duplicate/conflicting UI updates
+            
+            return true;
+        });
+    });
+}
+
+// Release lock for a work order
+function releaseLock(workOrderNumber) {
+    if (!workOrderNumber) return Promise.resolve();
+    
+    if (DEBUG_LOCK_MODE) console.log('🔓 Releasing lock for:', workOrderNumber);
+    
+    // Stop heartbeat
+    stopHeartbeat();
+    
+    // Remove lock from database
+    return db.ref('repairOrders/' + workOrderNumber).update({
+        lockedBy: null,
+        lockedByName: null,
+        lockHeartbeat: null,
+        lockedAt: null
+    }).then(() => {
+        // Cancel onDisconnect
+        db.ref('repairOrders/' + workOrderNumber + '/lockedBy').onDisconnect().cancel();
+        db.ref('repairOrders/' + workOrderNumber + '/lockedByName').onDisconnect().cancel();
+        db.ref('repairOrders/' + workOrderNumber + '/lockHeartbeat').onDisconnect().cancel();
+        db.ref('repairOrders/' + workOrderNumber + '/lockedAt').onDisconnect().cancel();
+        
+        currentLockStatus = 'unlocked';
+        if (DEBUG_LOCK_MODE) console.log('✅ Lock released successfully');
+    }).catch(err => {
+        console.error('Error releasing lock:', err);
+    });
+}
+
+// Start sending heartbeats
+function startHeartbeat(workOrderNumber) {
+    stopHeartbeat(); // Clear any existing interval
+    
+    lockHeartbeatInterval = setInterval(() => {
+        db.ref('repairOrders/' + workOrderNumber + '/lockHeartbeat')
+            .set(firebase.database.ServerValue.TIMESTAMP)
+            .then(() => {
+                if (DEBUG_LOCK_MODE) console.log('💓 Heartbeat sent');
+            })
+            .catch(err => {
+                console.error('Heartbeat failed:', err);
+                stopHeartbeat();
+            });
+    }, HEARTBEAT_INTERVAL);
+    
+    if (DEBUG_LOCK_MODE) console.log('💓 Heartbeat started (every', HEARTBEAT_INTERVAL/1000, 'sec)');
+}
+
+// Stop sending heartbeats
+function stopHeartbeat() {
+    if (lockHeartbeatInterval) {
+        clearInterval(lockHeartbeatInterval);
+        lockHeartbeatInterval = null;
+        if (DEBUG_LOCK_MODE) console.log('💓 Heartbeat stopped');
+    }
+}
+
+// Disable form (read-only mode)
+function disableForm(lockedByName) {
+    currentLockStatus = 'locked-by-other';
+    
+    // Disable all inputs
+    const form = document.getElementById('repair-order-form');
+    form.querySelectorAll('input, textarea, [contenteditable]').forEach(el => {
+        if (el.hasAttribute('contenteditable')) {
+            el.setAttribute('contenteditable', 'false');
+            el.style.backgroundColor = '#f0f0f0';
+            el.style.cursor = 'not-allowed';
+        } else {
+            el.disabled = true;
+        }
+    });
+    
+    // Disable checkboxes
+    form.querySelectorAll('.form-field-custom-checkbox').forEach(el => {
+        el.style.pointerEvents = 'none';
+        el.style.opacity = '0.5';
+    });
+    
+    // Disable Save and Delete buttons, but keep New Order and Print enabled
+    saveBtn.disabled = true;
+    deleteEntryBtn.disabled = true;
+    // Keep New Order and Print enabled - they don't modify locked work order
+    newOrderBtn.disabled = false;
+    document.getElementById('print-btn').disabled = false;
+    
+    // Show lock message
+    const statusDiv = document.getElementById('save-status');
+    statusDiv.textContent = '� Locked by: ' + lockedByName;
+    statusDiv.style.color = '#ff4757';
+    statusDiv.style.fontWeight = 'bold';
+    statusDiv.classList.add('locked-readonly');
+    
+    // Show force unlock button
+    const forceUnlockBtn = document.getElementById('force-unlock-btn');
+    forceUnlockBtn.classList.add('visible');
+    
+    if (DEBUG_LOCK_MODE) console.log('� Form disabled - locked by:', lockedByName);
+}
+
+// Enable form (editable mode)
+function enableForm() {
+    currentLockStatus = 'locked-by-me';
+    
+    // Enable all inputs
+    const form = document.getElementById('repair-order-form');
+    form.querySelectorAll('input, textarea, [contenteditable]').forEach(el => {
+        if (el.hasAttribute('contenteditable')) {
+            el.setAttribute('contenteditable', 'true');
+            el.style.backgroundColor = '';
+            el.style.cursor = '';
+        } else {
+            el.disabled = false;
+        }
+    });
+    
+    // Enable checkboxes
+    form.querySelectorAll('.form-field-custom-checkbox').forEach(el => {
+        el.style.pointerEvents = '';
+        el.style.opacity = '';
+    });
+    
+    // Enable buttons
+    saveBtn.disabled = false;
+    deleteEntryBtn.disabled = false;
+    newOrderBtn.disabled = false;
+    document.getElementById('print-btn').disabled = false;
+    
+    // Update status
+    const statusDiv = document.getElementById('save-status');
+    statusDiv.textContent = '✏️ You are editing';
+    statusDiv.style.color = '#00ff88';
+    statusDiv.style.fontWeight = 'normal';
+    statusDiv.classList.remove('locked-readonly');
+    
+    // Hide force unlock button
+    const forceUnlockBtn = document.getElementById('force-unlock-btn');
+    forceUnlockBtn.classList.remove('visible');
+    
+    if (DEBUG_LOCK_MODE) console.log('✅ Form enabled - you have control');
+}
+
 // Real-time sync - watch for updates to current work order
 function startWatchingWorkOrder(workOrderNumber) {
     // Stop any existing listener first
     stopWatchingWorkOrder();
     
-    if (!workOrderNumber) return;
+    if (!workOrderNumber) {
+        currentWatchingWorkOrder = null;
+        return;
+    }
     
+    // Track which work order we're watching (even in read-only mode)
+    currentWatchingWorkOrder = workOrderNumber;
     console.log('Starting real-time sync for work order:', workOrderNumber);
     
     // Listen for changes to this specific work order
@@ -2784,6 +3077,79 @@ function startWatchingWorkOrder(workOrderNumber) {
         const updatedData = snapshot.val();
         
         if (!updatedData) return;
+        
+        // Edge fix: Ignore updates for work orders we're no longer watching
+        // This prevents race conditions when switching rapidly
+        if (currentWatchingWorkOrder !== workOrderNumber) {
+            if (DEBUG_LOCK_MODE) console.log('⏭️ Ignoring update for old WO:', workOrderNumber);
+            return;
+        }
+        
+        // Check lock status
+        if (updatedData.lockedBy && updatedData.lockedBy !== myDeviceId) {
+            // Check if lock is still valid
+            const lockAge = Date.now() - (updatedData.lockHeartbeat || updatedData.lockedAt || 0);
+            
+            if (lockAge < LOCK_EXPIRY_TIME) {
+                // Locked by someone else - show read-only
+                // BUT: Don't override if we think we have the lock (possible Firebase delay)
+                if (currentLockStatus === 'locked-by-me') {
+                    console.warn('⚠️ Watcher sees different lock, but we think we have it. Re-checking...');
+                    // Double-check lock ownership
+                    db.ref('repairOrders/' + workOrderNumber + '/lockedBy').once('value').then(snap => {
+                        if (snap.val() !== myDeviceId) {
+                            console.error('❌ Confirmed: Lost lock to another user');
+                            disableForm(updatedData.lockedByName || 'Another user');
+                        } else if (DEBUG_LOCK_MODE) {
+                            console.log('✅ Confirmed: We still have the lock');
+                        }
+                    });
+                } else if (currentLockStatus !== 'locked-by-other') {
+                    document.getElementById('save-status').textContent = '� ' + (updatedData.lockedByName || 'Another user') + ' started editing';
+                    document.getElementById('save-status').style.color = '#ff4757';
+                    setTimeout(() => {
+                        if (currentLockStatus === 'locked-by-other') {
+                            document.getElementById('save-status').textContent = '� Locked by: ' + (updatedData.lockedByName || 'Another user');
+                        }
+                    }, 3000);
+                    disableForm(updatedData.lockedByName || 'Another user');
+                }
+            } else {
+                // Lock expired - try to acquire it
+                if (currentLockStatus === 'locked-by-other') {
+                    acquireLock(workOrderNumber).then(() => {
+                        currentWorkOrderNumber = workOrderNumber;
+                        currentLockStatus = 'locked-by-me';
+                        // Reload data to show changes made by other user
+                        loadWorkOrderData(updatedData);
+                        enableForm(); // Must explicitly enable form
+                        document.getElementById('save-status').textContent = '✅ Work order unlocked - reloaded with latest changes';
+                        document.getElementById('save-status').style.color = '#00ff88';
+                        setTimeout(() => {
+                            document.getElementById('save-status').textContent = '✏️ You are editing';
+                        }, 3000);
+                    }).catch(err => {
+                        console.error('Failed to acquire expired lock:', err);
+                    });
+                }
+            }
+        } else if (!updatedData.lockedBy && currentLockStatus === 'locked-by-other') {
+            // Lock was released - try to acquire it and reload data
+            acquireLock(workOrderNumber).then(() => {
+                currentWorkOrderNumber = workOrderNumber;
+                currentLockStatus = 'locked-by-me';
+                // Reload data to show changes made by other user
+                loadWorkOrderData(updatedData);
+                enableForm(); // Must explicitly enable form
+                document.getElementById('save-status').textContent = '✅ Work order unlocked - reloaded with latest changes';
+                document.getElementById('save-status').style.color = '#00ff88';
+                setTimeout(() => {
+                    document.getElementById('save-status').textContent = '✏️ You are editing';
+                }, 3000);
+            }).catch(err => {
+                console.error('Failed to acquire released lock:', err);
+            });
+        }
         
         // Always update the timestamp for future comparisons
         if (!lastKnownTimestamp) {
@@ -2793,15 +3159,16 @@ function startWatchingWorkOrder(workOrderNumber) {
 }
 
 function stopWatchingWorkOrder() {
-    if (currentWorkOrderListener) {
-        const woNumber = currentWorkOrderNumber;
-        if (woNumber) {
-            db.ref('repairOrders/' + woNumber).off('value', currentWorkOrderListener);
-            console.log('Stopped watching work order:', woNumber);
-        }
+    if (currentWorkOrderListener && currentWatchingWorkOrder) {
+        db.ref('repairOrders/' + currentWatchingWorkOrder).off('value', currentWorkOrderListener);
+        if (DEBUG_LOCK_MODE) console.log('🛑 Stopped watching work order:', currentWatchingWorkOrder);
         currentWorkOrderListener = null;
     }
+    currentWatchingWorkOrder = null;
     lastKnownTimestamp = null;
+    
+    // Also stop heartbeat when stopping watcher (Edge fix)
+    stopHeartbeat();
 }
 
 // Helper function to load work order data into form
@@ -2909,6 +3276,40 @@ function setDefaultCheckboxes() {
         }
     });
 }
+
+// Firefox form clearing on page load/refresh (Firefox caches form values)
+const form = document.getElementById('repair-order-form');
+if (form) {
+    // Clear all text inputs
+    form.querySelectorAll('input[type="text"], input[type="number"], input[type="tel"], input[type="email"]').forEach(input => {
+        input.value = '';
+    });
+    
+    // Clear textareas
+    form.querySelectorAll('textarea').forEach(textarea => {
+        textarea.value = '';
+    });
+    
+    // Clear contenteditable elements
+    form.querySelectorAll('[contenteditable]').forEach(el => {
+        el.textContent = '';
+        el.innerHTML = '';
+    });
+    
+    // Clear checkboxes
+    form.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        cb.checked = false;
+    });
+    
+    // Clear custom checkboxes
+    document.querySelectorAll('.form-field-custom-checkbox').forEach(div => {
+        div.classList.remove('checked');
+    });
+}
+
+// Clear dropdown
+const dropdown = document.getElementById('entries-dropdown');
+if (dropdown) dropdown.value = '';
 
 // Set current date when page loads
 setCurrentDate();
@@ -3093,16 +3494,34 @@ entriesDropdown.addEventListener('blur', function() {
     }, 200); // Small delay to allow selection
 });
 
-entriesDropdown.addEventListener('change', function() {
+entriesDropdown.addEventListener('change', function(e) {
     const key = entriesDropdown.value;
+    
+    // Check for force unlock (Ctrl+Shift held during selection)
+    const forceUnlock = e.ctrlKey && e.shiftKey;
     if (!key || !entriesCache[key]) {
+        // Release lock on previous work order
+        if (currentWorkOrderNumber) {
+            releaseLock(currentWorkOrderNumber);
+        }
+        
         stopWatchingWorkOrder(); // Stop watching when clearing
         currentEditKey = null;
         currentWorkOrderNumber = null; // Reset work order tracking
+        currentLockStatus = 'unlocked'; // Reset lock status
+        
         deleteEntryBtn.style.display = 'none';
         newOrderBtn.style.display = 'none';
         saveBtn.textContent = 'Save';
         document.getElementById('save-status').textContent = '';
+        document.getElementById('save-status').classList.remove('locked-readonly');
+        
+        // Hide force unlock button
+        const forceUnlockBtn = document.getElementById('force-unlock-btn');
+        if (forceUnlockBtn) {
+            forceUnlockBtn.classList.remove('visible');
+        }
+        
         document.getElementById('repair-order-form').reset();
         clearPartsFields(); // Clear parts fields
         // Reset custom checkbox visual states
@@ -3114,44 +3533,152 @@ entriesDropdown.addEventListener('change', function() {
         return;
     }
     const entry = entriesCache[key];
-    currentEditKey = key;
-    currentWorkOrderNumber = key; // Track the work order number
     
-    // Load the data
-    loadWorkOrderData(entry);
+    // Stop watching previous work order (also stops heartbeat)
+    stopWatchingWorkOrder();
     
-    saveBtn.textContent = 'Update';
-    document.getElementById('save-status').textContent = 'Editing entry...';
-    deleteEntryBtn.style.display = 'inline-block';
-    newOrderBtn.style.display = 'inline-block';
+    // Always clean up previous state first
+    const previousWO = currentWorkOrderNumber;
+    const hadLock = currentLockStatus === 'locked-by-me';
     
-    // Start watching for real-time updates
-    startWatchingWorkOrder(key);
+    if (DEBUG_LOCK_MODE && previousWO) {
+        console.log(`🔄 Switching from WO ${previousWO} (hadLock: ${hadLock}) to ${key}`);
+    }
+    
+    // Reset state immediately (Edge: clear everything before new operations)
+    currentLockStatus = 'unlocked';
+    currentWorkOrderNumber = null;
+    currentEditKey = null;
+    
+    // Hide force unlock button
+    const forceUnlockBtn = document.getElementById('force-unlock-btn');
+    if (forceUnlockBtn) {
+        forceUnlockBtn.classList.remove('visible');
+    }
+    
+    // Clear status
+    document.getElementById('save-status').textContent = '';
+    document.getElementById('save-status').classList.remove('locked-readonly');
+    
+    // Release lock ONLY if we had one and it's a different work order
+    const releasePromise = (hadLock && previousWO && previousWO !== key) 
+        ? releaseLock(previousWO).then(() => {
+            if (DEBUG_LOCK_MODE) console.log('🔓 Released previous lock, waiting for propagation...');
+            // Small delay to ensure Firebase has processed the release
+            return new Promise(resolve => setTimeout(resolve, 100));
+        })
+        : Promise.resolve();
+    
+    // Wait for release to complete before acquiring new lock
+    releasePromise.then(() => {
+        // Reset form to clean state before attempting lock
+        const form = document.getElementById('repair-order-form');
+        form.querySelectorAll('input, textarea, [contenteditable]').forEach(el => {
+            if (el.hasAttribute('contenteditable')) {
+                el.setAttribute('contenteditable', 'true');
+                el.style.backgroundColor = '';
+                el.style.cursor = '';
+            } else {
+                el.disabled = false;
+            }
+        });
+        form.querySelectorAll('.form-field-custom-checkbox').forEach(el => {
+            el.style.pointerEvents = '';
+            el.style.opacity = '';
+        });
+        
+        // Try to acquire lock (with force option)
+        return acquireLock(key, forceUnlock);
+    }).then(() => {
+        // Lock acquired successfully - NOW set current work order
+        currentEditKey = key;
+        currentWorkOrderNumber = key;
+        currentLockStatus = 'locked-by-me';
+        
+        if (forceUnlock && DEBUG_LOCK_MODE) {
+            console.log('⚠️ FORCE UNLOCK used - lock taken over');
+        }
+        
+        // Load the data in edit mode
+        loadWorkOrderData(entry);
+        
+        saveBtn.textContent = 'Update';
+        saveBtn.disabled = false;
+        deleteEntryBtn.style.display = 'inline-block';
+        deleteEntryBtn.disabled = false;
+        newOrderBtn.style.display = 'inline-block';
+        newOrderBtn.disabled = false;
+        document.getElementById('print-btn').disabled = false;
+        
+        document.getElementById('save-status').textContent = '✏️ You are editing';
+        document.getElementById('save-status').style.color = '#00ff88';
+        document.getElementById('save-status').classList.remove('locked-readonly');
+        
+        // Hide force unlock button
+        document.getElementById('force-unlock-btn').classList.remove('visible');
+        
+        // Start watching for real-time updates (small delay for Edge to process state)
+        setTimeout(() => startWatchingWorkOrder(key), 50);
+    }).catch(error => {
+        if (error.locked) {
+            // Locked by someone else - load in read-only mode
+            // State already cleared above - don't set currentWorkOrderNumber
+            // This prevents us from trying to release a lock we don't own next time
+            
+            loadWorkOrderData(entry);
+            
+            saveBtn.textContent = 'Update';
+            deleteEntryBtn.style.display = 'inline-block';
+            newOrderBtn.style.display = 'inline-block';
+            
+            // Disable form (this sets currentLockStatus = 'locked-by-other')
+            disableForm(error.lockedBy);
+            
+            // Start watching for real-time updates (small delay for Edge to process state)
+            setTimeout(() => startWatchingWorkOrder(key), 50);
+            
+            if (DEBUG_LOCK_MODE) console.log('📖 Viewing WO', key, 'in read-only mode (no lock owned)');
+        } else {
+            console.error('Error acquiring lock:', error);
+            document.getElementById('save-status').textContent = 'Error: ' + error;
+            document.getElementById('save-status').style.color = '#dc3545';
+        }
+    });
 });
 
 deleteEntryBtn.addEventListener('click', function() {
     if (!currentEditKey) return;
     if (!confirm('Delete this entry?')) return;
-    db.ref('repairOrders/' + currentEditKey).remove(function(error) {
-        if (error) {
-            alert('Error deleting entry!');
-        } else {
-            deleteEntryBtn.style.display = 'none';
-            newOrderBtn.style.display = 'none';
-            entriesDropdown.value = '';
-            currentEditKey = null;
-            saveBtn.textContent = 'Save';
-            document.getElementById('save-status').textContent = 'Entry deleted.';
-            document.getElementById('repair-order-form').reset();
-            vinEditable.textContent = '';
-            updateVinHighlight();
-        }
+    
+    // Release lock before deleting
+    releaseLock(currentEditKey).then(() => {
+        db.ref('repairOrders/' + currentEditKey).remove(function(error) {
+            if (error) {
+                alert('Error deleting entry!');
+            } else {
+                deleteEntryBtn.style.display = 'none';
+                newOrderBtn.style.display = 'none';
+                entriesDropdown.value = '';
+                currentEditKey = null;
+                currentWorkOrderNumber = null;
+                saveBtn.textContent = 'Save';
+                document.getElementById('save-status').textContent = 'Entry deleted.';
+                document.getElementById('repair-order-form').reset();
+                vinEditable.textContent = '';
+                updateVinHighlight();
+            }
+        });
     });
 });
 
 // New Work Order button functionality
 document.getElementById('new-work-order-btn').addEventListener('click', async function() {
     if (!confirm('Create a completely new work order? This will clear all current data.')) return;
+    
+    // Release lock on current work order
+    if (currentWorkOrderNumber) {
+        await releaseLock(currentWorkOrderNumber);
+    }
     
     // Reset the entire form
     const form = document.getElementById('repair-order-form');
@@ -3179,18 +3706,28 @@ document.getElementById('new-work-order-btn').addEventListener('click', async fu
     // Reset UI state
     currentEditKey = null;
     currentWorkOrderNumber = null; // Reset work order tracking
+    currentLockStatus = 'unlocked';
     saveBtn.textContent = 'Save';
     entriesDropdown.value = '';
     entrySearch.value = '';
     deleteEntryBtn.style.display = 'none';
     newOrderBtn.style.display = 'none';
     document.getElementById('save-status').textContent = 'New work order ready';
+    
+    // Enable form
+    enableForm();
+    
     setTimeout(function() { document.getElementById('save-status').textContent = ''; }, 3000);
 });
 
 // New Order (Same Customer) button functionality
 newOrderBtn.addEventListener('click', async function() {
     if (!confirm('Create a new work order using the current customer and vehicle information?')) return;
+    
+    // Release lock on current work order
+    if (currentWorkOrderNumber) {
+        await releaseLock(currentWorkOrderNumber);
+    }
     
     // Store customer and vehicle info
     const form = document.getElementById('repair-order-form');
@@ -3214,9 +3751,32 @@ newOrderBtn.addEventListener('click', async function() {
     // Store VIN editable content
     const vinEditableContent = vinEditable.textContent;
     
-    // Reset the form
+    // Reset the form (Firefox-compatible clearing)
     form.reset();
+    
+    // Explicitly clear all inputs for Firefox
+    form.querySelectorAll('input[type="text"], input[type="number"], input[type="tel"], input[type="email"]').forEach(input => {
+        if (!preserveFields.includes(input.name)) {
+            input.value = '';
+        }
+    });
+    
+    // Clear textareas
+    form.querySelectorAll('textarea').forEach(textarea => {
+        textarea.value = '';
+    });
+    
+    // Clear contenteditable elements except VIN (Firefox requires both)
+    form.querySelectorAll('[contenteditable]').forEach(el => {
+        if (el.id !== 'vin_editable') {
+            el.textContent = '';
+            el.innerHTML = '';
+        }
+    });
+    
     clearPartsFields(); // Clear parts fields
+    
+    // Clear checkboxes
     document.querySelectorAll('.form-field-custom-checkbox').forEach(function(div) {
         div.classList.remove('checked');
     });
@@ -3244,14 +3804,91 @@ newOrderBtn.addEventListener('click', async function() {
     
     // Reset UI state
     currentEditKey = null;
-    currentWorkOrderNumber = null; // Reset work order tracking
+    currentWorkOrderNumber = null;
+    currentWatchingWorkOrder = null;
+    currentLockStatus = 'unlocked';
     saveBtn.textContent = 'Save';
     entriesDropdown.value = '';
     deleteEntryBtn.style.display = 'none';
     newOrderBtn.style.display = 'none';
     
+    // Stop watching old work order
+    stopWatchingWorkOrder();
+    
+    // Enable form
+    enableForm();
+    
     document.getElementById('save-status').textContent = 'New order ready for same customer/vehicle';
     setTimeout(function() { document.getElementById('save-status').textContent = ''; }, 3000);
+});
+
+// Release lock when browser closes (multiple events for cross-browser compatibility)
+const releaseOnClose = function(e) {
+    if (currentWorkOrderNumber && currentLockStatus === 'locked-by-me') {
+        // Synchronous release attempt
+        releaseLock(currentWorkOrderNumber);
+        if (DEBUG_LOCK_MODE) console.log('🚪 Browser closing - releasing lock');
+    }
+};
+
+window.addEventListener('beforeunload', releaseOnClose);
+// pagehide is more reliable in Firefox than beforeunload
+window.addEventListener('pagehide', releaseOnClose);
+
+// Pause/resume heartbeat when tab visibility changes (mobile/background)
+document.addEventListener('visibilitychange', function() {
+    if (document.hidden) {
+        // Tab hidden - stop heartbeat to save battery/bandwidth
+        // Lock will expire after 90 seconds if tab stays hidden
+        if (currentWorkOrderNumber && currentLockStatus === 'locked-by-me') {
+            stopHeartbeat();
+            if (DEBUG_LOCK_MODE) console.log('👁️ Tab hidden - pausing heartbeat (lock will expire in 90s)');
+        }
+    } else if (!document.hidden) {
+        // Tab visible again - check if we still have the lock
+        if (currentWorkOrderNumber && currentLockStatus === 'locked-by-me') {
+            // Verify lock is still ours before resuming heartbeat
+            db.ref('repairOrders/' + currentWorkOrderNumber + '/lockedBy').once('value').then(snapshot => {
+                const lockedBy = snapshot.val();
+                if (lockedBy === myDeviceId) {
+                    // Still ours - resume heartbeat
+                    startHeartbeat(currentWorkOrderNumber);
+                    if (DEBUG_LOCK_MODE) console.log('👁️ Tab visible - resuming heartbeat');
+                } else {
+                    // Lost the lock while hidden
+                    currentLockStatus = 'unlocked';
+                    if (DEBUG_LOCK_MODE) console.log('⚠️ Lost lock while tab was hidden');
+                }
+            });
+        }
+    }
+});
+
+// Force unlock button
+document.getElementById('force-unlock-btn').addEventListener('click', function() {
+    // Use currentWatchingWorkOrder (set even in read-only) instead of currentWorkOrderNumber
+    const woNumber = currentWatchingWorkOrder || currentWorkOrderNumber;
+    
+    if (!woNumber) {
+        alert('No work order selected');
+        return;
+    }
+    
+    if (confirm('Force unlock this work order? This will override the current lock.')) {
+        // Force acquire lock
+        acquireLock(woNumber, true).then(() => {
+            currentWorkOrderNumber = woNumber;
+            currentLockStatus = 'locked-by-me';
+            enableForm();
+            document.getElementById('save-status').textContent = '✅ Lock overridden - you can now edit';
+            document.getElementById('save-status').style.color = '#00ff88';
+            setTimeout(() => {
+                document.getElementById('save-status').textContent = '✏️ You are editing';
+            }, 3000);
+        }).catch(err => {
+            alert('Failed to unlock: ' + (err.message || err));
+        });
+    }
 });
 
 saveBtn.addEventListener('click', function() {
@@ -3299,6 +3936,15 @@ saveBtn.addEventListener('click', function() {
         // Check if work order already exists
         db.ref('repairOrders/' + woNumber).once('value').then(function(snapshot) {
             const exists = snapshot.exists();
+            const existingData = snapshot.val() || {};
+            
+            // Preserve lock data if we have it
+            if (currentLockStatus === 'locked-by-me') {
+                data.lockedBy = myDeviceId;
+                data.lockedByName = myDeviceName;
+                data.lockedAt = existingData.lockedAt || firebase.database.ServerValue.TIMESTAMP;
+                data.lockHeartbeat = firebase.database.ServerValue.TIMESTAMP;
+            }
             
             // Save all data
             db.ref('repairOrders/' + woNumber).set(data, function(error) {
@@ -3312,15 +3958,25 @@ saveBtn.addEventListener('click', function() {
                     
                     status.textContent = exists ? 'Updated!' : 'Saved!';
                     status.style.color = '#28a745';
-                    setTimeout(function() { status.textContent = ''; }, 2000);
+                    setTimeout(function() { 
+                        if (currentLockStatus === 'locked-by-me') {
+                            status.textContent = '✏️ You are editing';
+                            status.style.color = '#00ff88';
+                        } else {
+                            status.textContent = '';
+                        }
+                    }, 2000);
                     
                     // Update button text to reflect we're now editing
                     if (!exists) {
                         saveBtn.textContent = 'Update';
                         deleteEntryBtn.style.display = 'inline-block';
                         newOrderBtn.style.display = 'inline-block';
-                        // Start watching this new work order
-                        startWatchingWorkOrder(woNumber);
+                        
+                        // Acquire lock and start watching this new work order
+                        acquireLock(woNumber).then(() => {
+                            startWatchingWorkOrder(woNumber);
+                        });
                     }
                 }
             });
