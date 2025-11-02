@@ -2570,6 +2570,12 @@
     </script>
 
     <script>
+        // Global variables for lock system
+        let currentWorkOrderNumber = null;
+        let currentWatchingWorkOrder = null;
+        let currentLockStatus = null;
+        const DEBUG_LOCK_MODE = true;
+        
         // --- Firebase Connection ---
         try {
             const firebaseConfig = {
@@ -2936,14 +2942,13 @@ const deleteEntryBtn = document.getElementById('delete-entry-btn');
 const newOrderBtn = document.getElementById('new-order-btn');
 let entriesCache = {};
 let currentEditKey = null;
-let currentWorkOrderNumber = null; // Only set when we have the lock
-let currentWatchingWorkOrder = null; // Track which WO we're watching (even in read-only)
+// currentWorkOrderNumber and currentWatchingWorkOrder declared at top of Firebase script
 let lastZipUsedForCounty = ''; // Track ZIP code for smart county updates
 let currentWorkOrderListener = null; // Firebase listener for current work order
 let lastKnownTimestamp = null; // Track last timestamp to detect updates
 
 // --- LOCK SYSTEM ---
-const DEBUG_LOCK_MODE = true; // Set to false in production
+// DEBUG_LOCK_MODE declared at top of Firebase script
 const LOCK_TIMEOUT = DEBUG_LOCK_MODE ? 60000 : 900000; // 1 min (debug) or 15 min (production)
 const HEARTBEAT_INTERVAL = 30000; // 30 seconds
 const LOCK_EXPIRY_TIME = 90000; // 90 seconds - lock expires if no heartbeat
@@ -2951,7 +2956,7 @@ const LOCK_EXPIRY_TIME = 90000; // 90 seconds - lock expires if no heartbeat
 let myDeviceId = localStorage.getItem('deviceId');
 let myDeviceName = localStorage.getItem('deviceName');
 let lockHeartbeatInterval = null;
-let currentLockStatus = null; // 'locked-by-me', 'locked-by-other', 'unlocked'
+// currentLockStatus declared at top of Firebase script
 
 // Generate unique device ID on first run
 if (!myDeviceId) {
@@ -3444,11 +3449,6 @@ clearPartsFields();
 
 // Set default checkboxes for new work orders
 setDefaultCheckboxes();
-
-// Setup field change tracking on page load
-setTimeout(function() {
-    setupFieldChangeTracking();
-}, 500);
 
 // Generate initial work order number after Firebase is ready
 setTimeout(function() {
