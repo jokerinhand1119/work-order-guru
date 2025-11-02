@@ -2,7 +2,7 @@
   "name": "Work Order Guru",
   "short_name": "WO Guru",
   "description": "Professional Automotive Work Order Management",
-  "start_url": "./Work%20Order%20Guru.html",
+  "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#333333",
   "theme_color": "#333333",
