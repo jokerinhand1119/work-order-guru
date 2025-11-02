@@ -1351,6 +1351,19 @@
             </div>
             <div class="section-content">
                 <div class="section-body">
+                    <!-- Parts Lookup Buttons -->
+                    <div class="no-print" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px;">
+                        <button type="button" onclick="searchNapaProLink()" style="background: linear-gradient(135deg, #003da5 0%, #0055cc 100%); color: white; padding: 12px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; box-shadow: 0 3px 10px rgba(0, 61, 165, 0.3); font-size: 15px;">
+                            🔧 Search NAPA ProLink
+                        </button>
+                        <button type="button" onclick="searchRockAuto()" style="background: linear-gradient(135deg, #e31837 0%, #c41230 100%); color: white; padding: 12px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; box-shadow: 0 3px 10px rgba(227, 24, 55, 0.3); font-size: 15px;">
+                            🔧 Search RockAuto
+                        </button>
+                        <button type="button" onclick="searchEbayMotors()" style="background: linear-gradient(135deg, #e53238 0%, #0064d2 100%); color: white; padding: 12px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; box-shadow: 0 3px 10px rgba(0, 100, 210, 0.3); font-size: 15px;">
+                            🔧 Search eBay Motors
+                        </button>
+                    </div>
+                    
                     <div id="parts-list">
                         <!-- Parts will be added here dynamically -->
                     </div>
@@ -2366,6 +2379,96 @@
             if (makeField) makeField.addEventListener('change', updateYouTubePrefix);
             if (modelField) modelField.addEventListener('change', updateYouTubePrefix);
         });
+        
+        // Parts Lookup Functions
+        function searchNapaProLink() {
+            const vin = document.getElementById('vin')?.value.trim() || '';
+            
+            // Copy VIN to clipboard if available
+            if (vin) {
+                // Try modern clipboard API first
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(vin).then(() => {
+                        showToast(`VIN ${vin} copied! Opening NAPA ProLink...`);
+                    }).catch(err => {
+                        // Fallback to older method
+                        copyToClipboardFallback(vin);
+                    });
+                } else {
+                    // Use fallback method for older browsers
+                    copyToClipboardFallback(vin);
+                }
+            } else {
+                showToast(`No VIN entered. Opening NAPA ProLink...`);
+            }
+            
+            // Open NAPA ProLink main page - user will paste VIN there
+            const napaURL = `https://pro.napaprolink.com/`;
+            window.open(napaURL, '_blank');
+        }
+        
+        // Fallback clipboard copy method
+        function copyToClipboardFallback(text) {
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-9999px';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    showToast(`VIN ${text} copied! Opening NAPA ProLink...`);
+                } else {
+                    showToast(`Could not copy VIN. Manual entry needed.`);
+                }
+            } catch (err) {
+                console.error('Fallback copy failed:', err);
+                showToast(`VIN: ${text} - Opening NAPA ProLink...`);
+            }
+            
+            document.body.removeChild(textArea);
+        }
+        
+        function searchRockAuto() {
+            const year = document.getElementById('year')?.value.trim() || '';
+            const make = document.getElementById('make')?.value.trim() || '';
+            const model = document.getElementById('model')?.value.trim() || '';
+            
+            if (!year || !make || !model) {
+                showToast('Please enter Year, Make, and Model first');
+                return;
+            }
+            
+            // RockAuto format: https://www.rockauto.com/en/catalog/ford,2019,f-250
+            // Remove spaces and special characters from model
+            const cleanModel = model.toLowerCase().replace(/\s+/g, '+').replace(/[^a-z0-9+\-]/gi, '');
+            const cleanMake = make.toLowerCase().replace(/\s+/g, '+');
+            const rockAutoURL = `https://www.rockauto.com/en/catalog/${cleanMake},${year},${cleanModel}`;
+            
+            window.open(rockAutoURL, '_blank');
+            showToast(`Opening RockAuto for ${year} ${make} ${model}`);
+        }
+        
+        function searchEbayMotors() {
+            const year = document.getElementById('year')?.value.trim() || '';
+            const make = document.getElementById('make')?.value.trim() || '';
+            const model = document.getElementById('model')?.value.trim() || '';
+            
+            if (!year || !make || !model) {
+                showToast('Please enter Year, Make, and Model first');
+                return;
+            }
+            
+            // eBay Motors format: https://www.ebay.com/sch/i.html?_nkw=2019+Ford+F-250+parts&_sacat=6000
+            const searchQuery = `${year} ${make} ${model} parts`;
+            const ebayURL = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(searchQuery)}&_sacat=6000`;
+            
+            window.open(ebayURL, '_blank');
+            showToast(`Opening eBay Motors for ${year} ${make} ${model}`);
+        }
         
         // Labor Timer Functions
         let timerInterval = null;
