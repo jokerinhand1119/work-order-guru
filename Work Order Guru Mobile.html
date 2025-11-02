@@ -488,7 +488,7 @@
             }
             
             .form-input.has-icon {
-                padding-right: 60px;
+                padding-right: 105px; /* Space for two buttons */
             }
             
             textarea.form-input {
@@ -1149,7 +1149,8 @@
                         <label class="form-label">VIN Number</label>
                         <div class="form-input-group">
                             <input type="text" class="form-input has-icon" id="vin_number" placeholder="Scan or enter VIN" maxlength="17">
-                            <button class="input-icon" onclick="openScanner()">📷</button>
+                            <button class="input-icon" onclick="copyVinToClipboard()" style="right: 56px; background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);">📄</button>
+                            <button class="input-icon" onclick="openScanner()" style="right: 8px;">📷</button>
                         </div>
                     </div>
                     <div class="form-group">
@@ -2380,34 +2381,65 @@
             if (modelField) modelField.addEventListener('change', updateYouTubePrefix);
         });
         
-        // Parts Lookup Functions
-        function searchNapaProLink() {
-            const vin = document.getElementById('vin')?.value.trim() || '';
+        // Copy VIN to Clipboard Function
+        function copyVinToClipboard() {
+            const vinField = document.getElementById('vin_number');
+            const vin = vinField?.value.trim() || '';
             
-            // Copy VIN to clipboard if available
-            if (vin) {
-                // Try modern clipboard API first
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(vin).then(() => {
-                        showToast(`VIN ${vin} copied! Opening NAPA ProLink...`);
-                    }).catch(err => {
-                        // Fallback to older method
-                        copyToClipboardFallback(vin);
-                    });
-                } else {
-                    // Use fallback method for older browsers
-                    copyToClipboardFallback(vin);
-                }
-            } else {
-                showToast(`No VIN entered. Opening NAPA ProLink...`);
+            if (!vin) {
+                showToast('⚠️ No VIN to copy');
+                return;
             }
             
-            // Open NAPA ProLink main page - user will paste VIN there
+            // Select the VIN text
+            vinField.select();
+            vinField.setSelectionRange(0, 99999); // For mobile devices
+            
+            try {
+                // Try to copy using execCommand (most reliable)
+                const successful = document.execCommand('copy');
+                
+                if (successful) {
+                    showToast(`✓ VIN copied: ${vin}`);
+                    
+                    // Deselect after a moment
+                    setTimeout(() => {
+                        window.getSelection().removeAllRanges();
+                        vinField.blur();
+                    }, 500);
+                } else {
+                    // Try modern clipboard API as fallback
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(vin).then(() => {
+                            showToast(`✓ VIN copied: ${vin}`);
+                        }).catch(() => {
+                            showToast(`❌ Copy failed. VIN: ${vin}`);
+                        });
+                    } else {
+                        showToast(`❌ Copy failed. VIN: ${vin}`);
+                    }
+                }
+            } catch (err) {
+                showToast(`❌ Copy failed. VIN: ${vin}`);
+            }
+        }
+        
+        // Parts Lookup Functions
+        function searchNapaProLink() {
+            const vin = document.getElementById('vin_number')?.value.trim() || '';
+            
+            if (vin) {
+                showToast('💡 Tip: Use 📋 button to copy VIN first!');
+            } else {
+                showToast('Opening NAPA ProLink...');
+            }
+            
+            // Open NAPA ProLink main page
             const napaURL = `https://pro.napaprolink.com/`;
             window.open(napaURL, '_blank');
         }
         
-        // Fallback clipboard copy method
+        // Fallback clipboard copy method (no longer needed but keeping for compatibility)
         function copyToClipboardFallback(text) {
             const textArea = document.createElement('textarea');
             textArea.value = text;
