@@ -1017,6 +1017,8 @@
             #print_customer_name { top: 156.281px; left: 247.5px; width: 551px; height: 22px; font-size: 13px; }
             #print_address { top: 182.281px; left: 249.5px; width: 547px; height: 24px; font-size: 12px; }
             #print_year_make_model { top: 208.281px; left: 248.5px; width: 548px; height: 24px; font-size: 12px; }
+            /* Trim field - hidden for work order (trim goes with model), shown for inspection (separate field) */
+            #work-order-print #print_trim { display: none; }
             #print_vin_number { top: 234.281px; left: 119.5px; width: 273px; height: 31px; font-size: 10px; letter-spacing: 1.5px; }
             #print_engine_size { top: 239.281px; left: 713.5px; width: 81px; height: 23px; font-size: 11px; }
             
@@ -1208,9 +1210,15 @@
                             <input type="text" class="form-input" id="make" placeholder="Make">
                         </div>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">Model</label>
-                        <input type="text" class="form-input" id="model" placeholder="Model">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Model</label>
+                            <input type="text" class="form-input" id="model" placeholder="Model">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Trim</label>
+                            <input type="text" class="form-input" id="trim" placeholder="Trim">
+                        </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
@@ -1600,6 +1608,7 @@
             <div class="print-field" id="print_customer_name"></div>
             <div class="print-field" id="print_address"></div>
             <div class="print-field" id="print_year_make_model"></div>
+            <div class="print-field" id="print_trim"></div>
             <div class="print-field" id="print_vin_number"></div>
             <div class="print-field" id="print_engine_size"></div>
             <div class="print-field multiline" id="print_services_performed"></div>
@@ -3297,7 +3306,8 @@
 
                 document.getElementById('year').value = year;
                 document.getElementById('make').value = make;
-                document.getElementById('model').value = model + (trim ? (' ' + trim) : '');
+                document.getElementById('model').value = model;
+                document.getElementById('trim').value = trim;
                 document.getElementById('engine_size').value = engineSize;
 
                 showToast('Vehicle info loaded!');
@@ -3609,13 +3619,45 @@
                 printCounty.textContent = inputCounty.value || '';
             }
             
-            // Year/Make/Model combined field
+            // Year/Make/Model/Trim fields
             const year = document.getElementById('year')?.value || '';
             const make = document.getElementById('make')?.value || '';
             const model = document.getElementById('model')?.value || '';
+            const trim = document.getElementById('trim')?.value || '';
+            
             const ymm = document.getElementById('print_year_make_model');
-            if (ymm) {
-                ymm.textContent = `${year} ${make} ${model}`.trim();
+            const printTrim = document.getElementById('print_trim');
+            
+            // Detect which form is being printed
+            const workOrderDiv = document.getElementById('work-order-print');
+            const inspectionDiv = document.getElementById('inspection-form-print');
+            const isPrintingWorkOrder = workOrderDiv && !workOrderDiv.classList.contains('hide-for-print');
+            const isPrintingInspection = inspectionDiv && !inspectionDiv.classList.contains('hide-for-print');
+            
+            console.log('Print Detection:', {
+                isPrintingWorkOrder,
+                isPrintingInspection,
+                year, make, model, trim
+            });
+            
+            if (isPrintingWorkOrder) {
+                // WORK ORDER: All 4 values in one field (year make model trim)
+                console.log('Printing WORK ORDER - combining all 4');
+                if (ymm) {
+                    ymm.textContent = `${year} ${make} ${model} ${trim}`.trim();
+                }
+                if (printTrim) {
+                    printTrim.textContent = ''; // Clear trim field for work order
+                }
+            } else {
+                // INSPECTION FORM: year/make/model in one field, trim in separate field
+                console.log('Printing INSPECTION - separating trim');
+                if (ymm) {
+                    ymm.textContent = `${year} ${make} ${model}`.trim();
+                }
+                if (printTrim) {
+                    printTrim.textContent = trim;
+                }
             }
             
             // Parts list - just copy from parts fields (oil info already in pn1/q1 if present)
@@ -3705,6 +3747,7 @@
             const year = getValue('year');
             const make = getValue('make');
             const model = getValue('model');
+            const trim = getValue('trim');
             const mileage = getValue('mileage');
             const county = getValue('input_county');
             const licensePlate = getValue('license_plate');
@@ -3732,7 +3775,7 @@
                 input_new_s_i_exp: getValue('inspection_exp'),
                 input_customer_name: customerName,
                 input_address: address,
-                input_year_make_model_trim: `${year} ${make} ${model}`.trim(),
+                input_year_make_model_trim: `${year} ${make} ${model} ${trim}`.trim(),
                 input_vin_number: vinNumber,
                 input_engine_size: getValue('engine_size'),
                 input_description_of_work: servicesPerformed,
@@ -3777,6 +3820,7 @@
                 license_plate: licensePlate,
                 services_performed: servicesPerformed,
                 tech_name: techName,
+                trim: trim,
                 oil_type: getValue('oil_type'),
                 oil_qty: getValue('oil_qty'),
                 oil_filter: getValue('oil_filter'),
@@ -3825,6 +3869,7 @@
             const year = getValue('year');
             const make = getValue('make');
             const model = getValue('model');
+            const trim = getValue('trim');
             const mileage = getValue('mileage');
             const county = getValue('input_county');
             const licensePlate = getValue('license_plate');
@@ -3853,7 +3898,7 @@
                 input_new_s_i_exp: getValue('inspection_exp'),
                 input_customer_name: customerName,
                 input_address: address,
-                input_year_make_model_trim: `${year} ${make} ${model}`.trim(),
+                input_year_make_model_trim: `${year} ${make} ${model} ${trim}`.trim(),
                 input_vin_number: vinNumber,
                 input_engine_size: getValue('engine_size'),
                 input_description_of_work: servicesPerformed,
@@ -3899,6 +3944,7 @@
                 license_plate: licensePlate,
                 services_performed: servicesPerformed,
                 tech_name: techName,
+                trim: trim,
                 oil_type: getValue('oil_type'),
                 oil_qty: getValue('oil_qty'),
                 oil_filter: getValue('oil_filter'),
@@ -4476,16 +4522,30 @@
             // Load parts into UI
             loadPartsData(data);
             
-            // Split year/make/model from original format
+            // Split year/make/model/trim from original format
             if (data.input_year_make_model_trim) {
-                const parts = data.input_year_make_model_trim.split(' ');
+                const parts = data.input_year_make_model_trim.split(' ').filter(p => p);
                 setValue('year', parts[0] || '');
                 setValue('make', parts[1] || '');
-                setValue('model', parts.slice(2).join(' ') || '');
+                // Model is everything except year, make, and last word (which might be trim)
+                // But we also need to check if trim was saved separately
+                if (data.trim) {
+                    // Trim saved separately, so model is everything EXCEPT year, make, AND the last word (trim)
+                    // Example: "2024 Ford F150 XLT" -> model = "F150", trim = "XLT"
+                    const modelParts = parts.slice(2, -1); // Skip year/make, and skip last word (trim)
+                    setValue('model', modelParts.join(' ') || '');
+                    setValue('trim', data.trim);
+                } else {
+                    // Try to be smart: if we have more than 3 words, last might be trim
+                    // But for now, just put everything after make into model
+                    setValue('model', parts.slice(2).join(' ') || '');
+                    setValue('trim', '');
+                }
             } else {
                 setValue('year', data.year);
                 setValue('make', data.make);
                 setValue('model', data.model);
+                setValue('trim', data.trim || '');
             }
             
             // Load timer state
@@ -4936,6 +4996,7 @@
                     year: document.getElementById('year')?.value || '',
                     make: document.getElementById('make')?.value || '',
                     model: document.getElementById('model')?.value || '',
+                    trim: document.getElementById('trim')?.value || '',
                     mileage: document.getElementById('mileage')?.value || '',
                     license_plate: document.getElementById('license_plate')?.value || '',
                     stock: document.getElementById('stock')?.value || '',
