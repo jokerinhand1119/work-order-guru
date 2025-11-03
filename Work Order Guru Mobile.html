@@ -1337,16 +1337,6 @@
             </div>
             <div class="section-content">
                 <div class="section-body">
-                    <div class="form-group" style="display: flex; gap: 10px;">
-                        <div style="flex: 2;">
-                            <label class="form-label">Oil Type</label>
-                            <input type="text" class="form-input" id="oil_type" placeholder="e.g., 5W-30">
-                        </div>
-                        <div style="flex: 1;">
-                            <label class="form-label">Oil Qty</label>
-                            <input type="text" class="form-input" id="oil_qty" placeholder="e.g., 5 qts">
-                        </div>
-                    </div>
                     <div class="form-group">
                         <label class="form-label">Services Performed</label>
                         <textarea class="form-input" id="services_performed" placeholder="List services..."></textarea>
@@ -1377,6 +1367,22 @@
                         <button type="button" onclick="searchEbayMotors()" style="background: linear-gradient(135deg, #e53238 0%, #0064d2 100%); color: white; padding: 12px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; box-shadow: 0 3px 10px rgba(0, 100, 210, 0.3); font-size: 15px;">
                             🔧 Search eBay Motors
                         </button>
+                    </div>
+                    
+                    <!-- Oil Information -->
+                    <div class="form-group" style="display: flex; gap: 10px; margin-bottom: 15px;">
+                        <div style="flex: 1;">
+                            <label class="form-label">Oil Qty</label>
+                            <input type="text" class="form-input" id="oil_qty" placeholder="e.g., 5 qts">
+                        </div>
+                        <div style="flex: 2;">
+                            <label class="form-label">Oil Type</label>
+                            <input type="text" class="form-input" id="oil_type" placeholder="e.g., 5W-30">
+                        </div>
+                        <div style="flex: 2;">
+                            <label class="form-label">Oil Filter #</label>
+                            <input type="text" class="form-input" id="oil_filter" placeholder="e.g., PH8A">
+                        </div>
                     </div>
                     
                     <div id="parts-list">
@@ -2551,59 +2557,100 @@
         // Labor Timer Functions
         let timerInterval = null;
         let timerStartTime = null;
-        let timerElapsedSeconds = 0;
+        let timerPausedSeconds = 0;
+        const MAX_TIMER_HOURS = 12; // Auto-stop after 12 hours
         
-        function toggleTimer() {
+        async function toggleTimer() {
             const btn = document.getElementById('timer-btn');
+            const woNumber = document.getElementById('work_order_number')?.value;
+            
+            if (!woNumber) {
+                showToast('Please save work order first');
+                return;
+            }
             
             if (timerInterval) {
                 // Stop timer
                 clearInterval(timerInterval);
                 timerInterval = null;
                 
+                // Calculate total elapsed time
+                if (timerStartTime) {
+                    const currentElapsed = Math.floor((Date.now() - timerStartTime) / 1000);
+                    timerPausedSeconds += currentElapsed;
+                    timerStartTime = null;
+                }
+                
                 // Calculate total hours
-                const totalSeconds = timerElapsedSeconds;
-                const hours = (totalSeconds / 3600).toFixed(2);
+                const hours = (timerPausedSeconds / 3600).toFixed(2);
                 document.getElementById('labor_hours').value = hours;
+                
+                // Save timer state to Firebase
+                await database.ref('repairOrders/' + woNumber).update({
+                    timerActive: false,
+                    timerPausedSeconds: timerPausedSeconds,
+                    timerStartTime: null
+                });
                 
                 btn.innerHTML = '▶️ Start Timer';
                 btn.style.background = 'linear-gradient(135deg, #4CAF50 0%, #45a049 100%)';
                 showToast(`Timer stopped. Labor hours: ${hours}`);
+                
+                // Refresh entries to remove indicator
+                loadPreviousEntries();
             } else {
                 // Start timer
                 timerStartTime = Date.now();
-                timerInterval = setInterval(updateTimerDisplay, 1000);
+                timerInterval = setInterval(updateTimerDisplay, 100);
+                
+                // Save timer state to Firebase
+                await database.ref('repairOrders/' + woNumber).update({
+                    timerActive: true,
+                    timerStartTime: timerStartTime,
+                    timerPausedSeconds: timerPausedSeconds
+                });
                 
                 btn.innerHTML = '⏸️ Stop Timer';
                 btn.style.background = 'linear-gradient(135deg, #ff6b35 0%, #f7931e 100%)';
                 showToast('Timer started');
+                
+                // Refresh entries to show indicator
+                loadPreviousEntries();
             }
         }
         
         function updateTimerDisplay() {
             if (timerStartTime) {
-                const elapsed = Math.floor((Date.now() - timerStartTime) / 1000);
-                timerElapsedSeconds += 1;
+                // Calculate actual elapsed time from timestamp (works through sleep)
+                const currentElapsed = Math.floor((Date.now() - timerStartTime) / 1000);
+                const totalSeconds = timerPausedSeconds + currentElapsed;
                 
-                const hours = Math.floor(timerElapsedSeconds / 3600);
-                const minutes = Math.floor((timerElapsedSeconds % 3600) / 60);
-                const seconds = timerElapsedSeconds % 60;
+                // Auto-stop if exceeds max hours
+                if (totalSeconds >= MAX_TIMER_HOURS * 3600) {
+                    showToast(`⚠️ Timer auto-stopped after ${MAX_TIMER_HOURS} hours`);
+                    toggleTimer(); // Stop the timer
+                    return;
+                }
+                
+                const hours = Math.floor(totalSeconds / 3600);
+                const minutes = Math.floor((totalSeconds % 3600) / 60);
+                const seconds = totalSeconds % 60;
                 
                 const display = `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
                 document.getElementById('timer-display').textContent = display;
-                
-                timerStartTime = Date.now(); // Reset for next second
             }
         }
         
-        function resetTimer() {
+        async function resetTimer() {
+            const woNumber = document.getElementById('work_order_number')?.value;
+            
             if (timerInterval) {
                 clearInterval(timerInterval);
                 timerInterval = null;
             }
             
             timerStartTime = null;
-            timerElapsedSeconds = 0;
+            timerPausedSeconds = 0;
             document.getElementById('timer-display').textContent = '0:00:00';
             document.getElementById('labor_hours').value = '';
             
@@ -2611,7 +2658,125 @@
             btn.innerHTML = '▶️ Start Timer';
             btn.style.background = 'linear-gradient(135deg, #4CAF50 0%, #45a049 100%)';
             
+            // Clear timer state in Firebase
+            if (woNumber) {
+                await database.ref('repairOrders/' + woNumber).update({
+                    timerActive: false,
+                    timerPausedSeconds: 0,
+                    timerStartTime: null
+                });
+                
+                // Refresh entries to remove indicator
+                loadPreviousEntries();
+            }
+            
             showToast('Timer reset');
+        }
+        
+        // Check for active timers across all work orders
+        async function checkForActiveTimers() {
+            try {
+                const snapshot = await database.ref('repairOrders').once('value');
+                const activeTimers = [];
+                
+                snapshot.forEach((child) => {
+                    const data = child.val();
+                    if (data.timerActive && data.timerStartTime) {
+                        const elapsed = Math.floor((Date.now() - data.timerStartTime) / 1000);
+                        const total = (data.timerPausedSeconds || 0) + elapsed;
+                        const hours = (total / 3600).toFixed(1);
+                        
+                        activeTimers.push({
+                            woNumber: child.key,
+                            hours: hours,
+                            customerName: data.customer_name || data.input_customer_name || '?'
+                        });
+                    }
+                });
+                
+                if (activeTimers.length > 0) {
+                    let message = '⚠️ Active timers found:\n\n';
+                    activeTimers.forEach(timer => {
+                        message += `WO ${timer.woNumber} (${timer.customerName}): ${timer.hours} hrs\n`;
+                    });
+                    message += '\nOpen those work orders to stop the timers.';
+                    
+                    // Show as toast notification
+                    showToast(`${activeTimers.length} active timer(s) running 🔴`);
+                    console.log(message);
+                }
+            } catch (error) {
+                console.error('Error checking active timers:', error);
+            }
+        }
+        
+        // Load timer state when opening a work order
+        function loadTimerState(data) {
+            // Stop any existing timer
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+            
+            const btn = document.getElementById('timer-btn');
+            
+            if (data.timerActive && data.timerStartTime) {
+                // Timer was running - restore it
+                timerStartTime = data.timerStartTime;
+                timerPausedSeconds = data.timerPausedSeconds || 0;
+                
+                // Check if timer should auto-stop
+                const currentElapsed = Math.floor((Date.now() - timerStartTime) / 1000);
+                const totalSeconds = timerPausedSeconds + currentElapsed;
+                
+                if (totalSeconds >= MAX_TIMER_HOURS * 3600) {
+                    // Auto-stop expired timer
+                    timerStartTime = null;
+                    timerPausedSeconds = totalSeconds;
+                    const hours = (timerPausedSeconds / 3600).toFixed(2);
+                    document.getElementById('labor_hours').value = hours;
+                    
+                    btn.innerHTML = '▶️ Start Timer';
+                    btn.style.background = 'linear-gradient(135deg, #4CAF50 0%, #45a049 100%)';
+                    showToast(`⚠️ Timer was auto-stopped after ${MAX_TIMER_HOURS} hours`);
+                    
+                    // Update Firebase
+                    const woNumber = document.getElementById('work_order_number')?.value;
+                    if (woNumber) {
+                        database.ref('repairOrders/' + woNumber).update({
+                            timerActive: false,
+                            timerPausedSeconds: timerPausedSeconds,
+                            timerStartTime: null
+                        });
+                    }
+                } else {
+                    // Resume timer
+                    timerInterval = setInterval(updateTimerDisplay, 100);
+                    btn.innerHTML = '⏸️ Stop Timer';
+                    btn.style.background = 'linear-gradient(135deg, #ff6b35 0%, #f7931e 100%)';
+                    updateTimerDisplay(); // Update display immediately
+                }
+            } else {
+                // Timer not running - load paused time if any
+                timerStartTime = null;
+                timerPausedSeconds = data.timerPausedSeconds || 0;
+                
+                if (timerPausedSeconds > 0) {
+                    const hours = Math.floor(timerPausedSeconds / 3600);
+                    const minutes = Math.floor((timerPausedSeconds % 3600) / 60);
+                    const seconds = timerPausedSeconds % 60;
+                    const display = `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                    document.getElementById('timer-display').textContent = display;
+                    
+                    const totalHours = (timerPausedSeconds / 3600).toFixed(2);
+                    document.getElementById('labor_hours').value = totalHours;
+                } else {
+                    document.getElementById('timer-display').textContent = '0:00:00';
+                }
+                
+                btn.innerHTML = '▶️ Start Timer';
+                btn.style.background = 'linear-gradient(135deg, #4CAF50 0%, #45a049 100%)';
+            }
         }
         
         // Open Fusebox Diagram on StartMyCar.com
@@ -3568,6 +3733,7 @@
                 input_old_s_i_miles: getValue('old_inspection_miles'),
                 input_oil_type: getValue('oil_type'),
                 input_oil_qty: getValue('oil_qty'),
+                input_oil_filter: getValue('oil_filter'),
                 
                 // Emissions checkboxes
                 input_chk_cat: getCheckbox('chk_cat'),
@@ -3590,6 +3756,9 @@
                 license_plate: licensePlate,
                 services_performed: servicesPerformed,
                 tech_name: techName,
+                oil_type: getValue('oil_type'),
+                oil_qty: getValue('oil_qty'),
+                oil_filter: getValue('oil_filter'),
                 timestamp: new Date().toISOString(),
                 ...partsData  // Spread parts data into the work order
             };
@@ -3685,6 +3854,7 @@
                 input_old_s_i_miles: getValue('old_inspection_miles'),
                 input_oil_type: getValue('oil_type'),
                 input_oil_qty: getValue('oil_qty'),
+                input_oil_filter: getValue('oil_filter'),
                 
                 // Emissions checkboxes
                 input_chk_cat: getCheckbox('chk_cat'),
@@ -3710,6 +3880,7 @@
                 tech_name: techName,
                 oil_type: getValue('oil_type'),
                 oil_qty: getValue('oil_qty'),
+                oil_filter: getValue('oil_filter'),
                 timestamp: new Date().toISOString(),
                 ...partsData  // Spread parts data into the work order
             };
@@ -3780,73 +3951,94 @@
         }
         
         // Track if we've already shifted for oil
-        let oilPartsShifted = false;
+        let oilFieldsShifted = false;
         
-        // Auto-fill first part with oil info when oil fields change
+        // Auto-fill first two parts with oil info when oil fields change
         function syncOilToParts() {
             const oilType = document.getElementById('oil_type')?.value || '';
             const oilQty = document.getElementById('oil_qty')?.value || '';
+            const oilFilter = document.getElementById('oil_filter')?.value || '';
             const hasOilInfo = oilType || oilQty;
+            const hasOilFilter = oilFilter;
             
-            if (hasOilInfo) {
+            // Calculate how many slots we need (1 for oil, 1 for filter if present)
+            const slotsNeeded = (hasOilInfo ? 1 : 0) + (hasOilFilter ? 1 : 0);
+            
+            if (slotsNeeded > 0) {
+                // Ensure we have enough part rows
+                while (partCounter < slotsNeeded) {
+                    addPartRow();
+                }
+                
                 const pn1 = document.getElementById('pn1');
                 const q1 = document.getElementById('q1');
+                const pn2 = document.getElementById('pn2');
+                const q2 = document.getElementById('q2');
                 
-                // If first part is already the oil info, just update it
-                if (pn1 && q1 && oilPartsShifted) {
-                    pn1.value = oilType;
-                    q1.value = oilQty;
+                // If already shifted, just update values - don't shift again
+                if (oilFieldsShifted) {
+                    if (hasOilInfo) {
+                        if (pn1) pn1.value = oilType;
+                        if (q1) q1.value = oilQty;
+                    }
+                    if (hasOilFilter) {
+                        if (pn2) pn2.value = oilFilter;
+                        if (q2) q2.value = '1';
+                    }
+                    return; // Exit early - already shifted
+                }
+                
+                // First time - need to shift
+                // Get ALL current parts data before shifting
+                const currentParts = [];
+                for (let i = 1; i <= partCounter; i++) {
+                    const pn = document.getElementById('pn' + i);
+                    const q = document.getElementById('q' + i);
+                    if (pn && q && (pn.value || q.value)) {
+                        currentParts.push({ pn: pn.value, q: q.value });
+                    }
+                }
+                
+                // Check if we can fit all parts after shift
+                if (currentParts.length + slotsNeeded > 17) {
+                    showToast('Cannot add oil info - maximum 17 parts reached');
                     return;
                 }
                 
-                // First time adding oil - need to shift
-                if (!oilPartsShifted) {
-                    // Get current parts data before shifting
-                    const currentParts = [];
-                    for (let i = 1; i <= partCounter; i++) {
-                        const pn = document.getElementById('pn' + i);
-                        const q = document.getElementById('q' + i);
-                        if (pn && q && (pn.value || q.value)) {
-                            currentParts.push({ pn: pn.value, q: q.value });
-                        }
+                // Add rows as needed to fit everything
+                const rowsNeeded = currentParts.length + slotsNeeded;
+                while (partCounter < rowsNeeded) {
+                    addPartRow();
+                }
+                
+                // Shift ALL existing parts down by slotsNeeded (start from the end to avoid overwriting)
+                for (let i = currentParts.length - 1; i >= 0; i--) {
+                    const targetSlot = i + slotsNeeded + 1;
+                    const pn = document.getElementById('pn' + targetSlot);
+                    const q = document.getElementById('q' + targetSlot);
+                    if (pn && q) {
+                        pn.value = currentParts[i].pn;
+                        q.value = currentParts[i].q;
                     }
-                    
-                    // Check if we can fit all parts after shift
-                    if (currentParts.length >= 17) {
-                        showToast('Cannot add oil - maximum 17 parts reached');
-                        return;
-                    }
-                    
-                    // Add rows as needed
-                    const rowsNeeded = currentParts.length + 1; // +1 for oil
-                    while (partCounter < rowsNeeded) {
-                        addPartRow();
-                    }
-                    
-                    // Shift all existing parts down by one
-                    for (let i = currentParts.length - 1; i >= 0; i--) {
-                        const pn = document.getElementById('pn' + (i + 2));
-                        const q = document.getElementById('q' + (i + 2));
-                        if (pn && q) {
-                            pn.value = currentParts[i].pn;
-                            q.value = currentParts[i].q;
-                        }
-                    }
-                    
-                    // Ensure first part row exists
-                    if (partCounter === 0) {
-                        addPartRow();
-                    }
-                    
-                    oilPartsShifted = true;
                 }
                 
                 // Put oil info in first part
-                if (pn1) pn1.value = oilType;
-                if (q1) q1.value = oilQty;
+                if (hasOilInfo) {
+                    if (pn1) pn1.value = oilType;
+                    if (q1) q1.value = oilQty;
+                }
+                
+                // Put oil filter in second part
+                if (hasOilFilter) {
+                    if (pn2) pn2.value = oilFilter;
+                    if (q2) q2.value = '1';
+                }
+                
+                // Mark as shifted
+                oilFieldsShifted = true;
             } else {
-                // Oil fields cleared - reset flag
-                oilPartsShifted = false;
+                // All oil fields cleared - reset flag
+                oilFieldsShifted = false;
             }
         }
         
@@ -3854,12 +4046,16 @@
         setTimeout(() => {
             const oilTypeField = document.getElementById('oil_type');
             const oilQtyField = document.getElementById('oil_qty');
+            const oilFilterField = document.getElementById('oil_filter');
             
             if (oilTypeField) {
                 oilTypeField.addEventListener('input', syncOilToParts);
             }
             if (oilQtyField) {
                 oilQtyField.addEventListener('input', syncOilToParts);
+            }
+            if (oilFilterField) {
+                oilFilterField.addEventListener('input', syncOilToParts);
             }
         }, 500);
         
@@ -4024,7 +4220,14 @@
                         const model = data.model || (data.input_year_make_model_trim ? data.input_year_make_model_trim.split(' ').slice(2).join(' ') : '');
                         
                         // Build multi-line display text with emojis and last 8 digits of VIN
-                        let displayText = `📅 ${date}\n`;
+                        let displayText = '';
+                        
+                        // Add timer indicator if active
+                        if (data.timerActive) {
+                            displayText += '🔴 ';
+                        }
+                        
+                        displayText += `📅 ${date}\n`;
                         if (vinNumber) {
                             // Get last 8 digits of VIN
                             const shortVin = vinNumber.length > 8 ? vinNumber.slice(-8) : vinNumber;
@@ -4074,6 +4277,18 @@
             }
             
             const workOrderNumber = this.value;
+            
+            // Check if current work order has active timer
+            if (timerInterval && currentEditingWorkOrder) {
+                const confirmSwitch = confirm(`⚠️ Timer is running on Work Order ${currentEditingWorkOrder}.\n\nDo you want to stop the timer and switch work orders?`);
+                if (!confirmSwitch) {
+                    // Reset dropdown selection
+                    this.value = currentEditingWorkOrder;
+                    return;
+                }
+                // Stop the timer before switching
+                toggleTimer();
+            }
             
             // Save state BEFORE stopping watcher
             const previousWO = currentEditingWorkOrder;
@@ -4197,6 +4412,7 @@
             setValue('old_inspection_miles', data.input_old_s_i_miles);
             setValue('oil_type', data.input_oil_type || data.oil_type);
             setValue('oil_qty', data.input_oil_qty || data.oil_qty);
+            setValue('oil_filter', data.input_oil_filter || data.oil_filter);
             
             // Load checkboxes
             const setCheckbox = (id, value) => {
@@ -4231,6 +4447,9 @@
                 setValue('make', data.make);
                 setValue('model', data.model);
             }
+            
+            // Load timer state
+            loadTimerState(data);
         }
         
         // Search entries (ignores special characters)
@@ -4288,6 +4507,10 @@
             if (woField) woField.value = woNumber;
             
             loadPreviousEntries();
+            
+            // Check for active timers after a short delay
+            setTimeout(checkForActiveTimers, 1000);
+            
             showToast('Welcome! 📱');
             
             // Force unlock button handler
