@@ -69,18 +69,10 @@
             
             body {
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                background: #2a2a2a;
                 min-height: 100vh;
                 padding: 0 12px 80px 12px;
-                animation: gradientShift 15s ease infinite;
-                background-size: 200% 200%;
                 transition: background 0.3s ease;
-            }
-            
-            @keyframes gradientShift {
-                0% { background-position: 0% 50%; }
-                50% { background-position: 100% 50%; }
-                100% { background-position: 0% 50%; }
             }
             
             /* ===== DARK MODE ===== */
@@ -355,33 +347,34 @@
             
             /* Section Cards */
             .section-card {
-                background: linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.95) 100%);
+                background: #0f172a;
                 border-radius: 20px;
                 margin-bottom: 20px;
-                box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+                box-shadow: 0 8px 32px rgba(0,0,0,0.3);
                 overflow: hidden;
-                border: 2px solid rgba(255,255,255,0.5);
-                backdrop-filter: blur(20px);
+                border: 1px solid #1e3a5f;
                 transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             }
             
             .section-card:hover {
                 transform: translateY(-2px);
-                box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+                box-shadow: 0 12px 40px rgba(0,0,0,0.4);
             }
             
             .section-header {
                 padding: 20px;
-                background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+                background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
                 cursor: pointer;
-                transition: all 0.2s;
+                transition: all 0.3s;
+                border: 1px solid #3b82f6;
             }
             
             .section-header:active {
-                background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+                background: linear-gradient(135deg, #334155 0%, #1e293b 100%);
+                box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3);
                 transform: scale(0.98);
             }
             
@@ -391,17 +384,18 @@
                 gap: 12px;
                 font-size: 18px;
                 font-weight: 700;
-                color: #2c3e50;
+                color: #e2e8f0;
             }
             
             .section-icon {
                 font-size: 28px;
-                filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+                color: #60a5fa;
+                filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
             }
             
             .expand-icon {
                 font-size: 24px;
-                color: #666;
+                color: #60a5fa;
                 transition: transform 0.3s;
             }
             
@@ -421,6 +415,7 @@
             
             .section-body {
                 padding: 16px;
+                background: #1e293b;
             }
             
             /* Form Fields */
@@ -432,7 +427,7 @@
                 display: block;
                 font-size: 12px;
                 font-weight: 700;
-                color: #667eea;
+                color: #60a5fa;
                 margin-bottom: 8px;
                 text-transform: uppercase;
                 letter-spacing: 0.5px;
@@ -441,20 +436,21 @@
             .form-input {
                 width: 100%;
                 padding: 14px 18px;
-                border: 2px solid #e0e0e0;
+                border: 2px solid #3b82f6;
                 border-radius: 12px;
                 font-size: 16px;
                 transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                background: #fafafa;
+                background: #1e293b;
+                color: #e2e8f0;
                 text-transform: uppercase;
                 font-weight: 500;
             }
             
             .form-input:focus {
                 outline: none;
-                border-color: #667eea;
-                background: white;
-                box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.15);
+                border-color: #60a5fa;
+                background: #334155;
+                box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
                 transform: translateY(-2px);
             }
             
@@ -494,6 +490,14 @@
             textarea.form-input {
                 min-height: 100px;
                 resize: vertical;
+                background: #1e293b !important;
+                color: #e2e8f0;
+                border: 2px solid #3b82f6;
+            }
+            
+            textarea.form-input:focus {
+                background: #334155 !important;
+                border-color: #60a5fa;
             }
             
             .form-row {
@@ -510,10 +514,27 @@
             
             select.form-input {
                 appearance: none;
-                background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Cpath fill='%23666' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+                background: #1e293b;
+                color: #e2e8f0;
+                border: 2px solid #3b82f6;
+                background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Cpath fill='%2360a5fa' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
                 background-repeat: no-repeat;
                 background-position: right 8px center;
                 padding-right: 40px;
+            }
+            
+            select.form-input:focus {
+                background: #334155;
+                border-color: #60a5fa;
+            }
+            
+            select.form-input option {
+                background: #1e293b;
+                color: #e2e8f0;
+            }
+            
+            .form-input::placeholder {
+                color: #94a3b8;
             }
             
             /* FAB */
@@ -3919,7 +3940,7 @@
             const partsList = document.getElementById('parts-list');
             const partRow = document.createElement('div');
             partRow.className = 'form-group';
-            partRow.style.cssText = 'border:1px solid #e0e0e0;padding:12px;border-radius:8px;margin-bottom:12px;background:#fafafa;';
+            partRow.style.cssText = 'border:1px solid #1e3a5f;padding:12px;border-radius:8px;margin-bottom:12px;background:#0f172a;';
             
             // Camera button HTML (only if enabled)
             const cameraButton = PART_SCANNER_ENABLED ? 
@@ -3950,9 +3971,6 @@
             btn.closest('.form-group').remove();
         }
         
-        // Track if we've already shifted for oil
-        let oilFieldsShifted = false;
-        
         // Auto-fill first two parts with oil info when oil fields change
         function syncOilToParts() {
             const oilType = document.getElementById('oil_type')?.value || '';
@@ -3961,84 +3979,106 @@
             const hasOilInfo = oilType || oilQty;
             const hasOilFilter = oilFilter;
             
-            // Calculate how many slots we need (1 for oil, 1 for filter if present)
+            if (!hasOilInfo && !hasOilFilter) {
+                // All oil fields cleared - nothing to do
+                return;
+            }
+            
+            // Ensure we have at least 2 rows if we have filter, or 1 if just oil
+            const minRows = (hasOilInfo && hasOilFilter) ? 2 : 1;
+            while (partCounter < minRows) {
+                addPartRow();
+            }
+            
+            const pn1 = document.getElementById('pn1');
+            const q1 = document.getElementById('q1');
+            const pn2 = document.getElementById('pn2');
+            const q2 = document.getElementById('q2');
+            
+            // Check if oil info is already in pn1/q1
+            const oilInPlace = hasOilInfo && pn1 && q1 && pn1.value === oilType && q1.value === oilQty;
+            
+            // Check if filter is already in pn2/q2
+            const filterInPlace = hasOilFilter && pn2 && pn2.value === oilFilter && q2 && q2.value === '1';
+            
+            // If both are already in place, do nothing
+            if (oilInPlace && (!hasOilFilter || filterInPlace)) {
+                return;
+            }
+            
+            // If oil is in place but filter isn't, just add filter to pn2
+            if (oilInPlace && hasOilFilter && !filterInPlace) {
+                if (!pn2) {
+                    addPartRow();
+                }
+                const pn2New = document.getElementById('pn2');
+                const q2New = document.getElementById('q2');
+                if (pn2New) pn2New.value = oilFilter;
+                if (q2New) q2New.value = '1';
+                return;
+            }
+            
+            // Need to shift - collect existing parts (but skip pn1/q1 if they're empty or about to be oil)
+            const currentParts = [];
+            const startFrom = hasOilInfo ? 1 : 0; // Skip first slot if we're putting oil there
+            
+            for (let i = 1; i <= partCounter; i++) {
+                const pn = document.getElementById('pn' + i);
+                const q = document.getElementById('q' + i);
+                
+                // Skip if this will be an oil slot
+                if (i === 1 && hasOilInfo) continue; // Skip pn1/q1 if we're putting oil there
+                if (i === 2 && hasOilFilter && hasOilInfo) continue; // Skip pn2/q2 if we're putting filter there
+                
+                if (pn && q && (pn.value || q.value)) {
+                    currentParts.push({ pn: pn.value, q: q.value });
+                }
+            }
+            
+            // Calculate slots needed (1 for oil, 1 for filter)
             const slotsNeeded = (hasOilInfo ? 1 : 0) + (hasOilFilter ? 1 : 0);
             
-            if (slotsNeeded > 0) {
-                // Ensure we have enough part rows
-                while (partCounter < slotsNeeded) {
-                    addPartRow();
+            // Check if we can fit everything
+            if (currentParts.length + slotsNeeded > 17) {
+                showToast('Cannot add oil info - maximum 17 parts reached');
+                return;
+            }
+            
+            // Add rows as needed
+            const totalRowsNeeded = currentParts.length + slotsNeeded;
+            while (partCounter < totalRowsNeeded) {
+                addPartRow();
+            }
+            
+            // Clear ALL existing parts first to avoid duplicates
+            for (let i = 1; i <= partCounter; i++) {
+                const pn = document.getElementById('pn' + i);
+                const q = document.getElementById('q' + i);
+                if (pn) pn.value = '';
+                if (q) q.value = '';
+            }
+            
+            // Now place the collected parts starting AFTER the oil slots
+            for (let i = 0; i < currentParts.length; i++) {
+                const targetSlot = i + slotsNeeded + 1; // Start after oil/filter slots
+                const pn = document.getElementById('pn' + targetSlot);
+                const q = document.getElementById('q' + targetSlot);
+                if (pn && q) {
+                    pn.value = currentParts[i].pn;
+                    q.value = currentParts[i].q;
                 }
-                
-                const pn1 = document.getElementById('pn1');
-                const q1 = document.getElementById('q1');
-                const pn2 = document.getElementById('pn2');
-                const q2 = document.getElementById('q2');
-                
-                // If already shifted, just update values - don't shift again
-                if (oilFieldsShifted) {
-                    if (hasOilInfo) {
-                        if (pn1) pn1.value = oilType;
-                        if (q1) q1.value = oilQty;
-                    }
-                    if (hasOilFilter) {
-                        if (pn2) pn2.value = oilFilter;
-                        if (q2) q2.value = '1';
-                    }
-                    return; // Exit early - already shifted
-                }
-                
-                // First time - need to shift
-                // Get ALL current parts data before shifting
-                const currentParts = [];
-                for (let i = 1; i <= partCounter; i++) {
-                    const pn = document.getElementById('pn' + i);
-                    const q = document.getElementById('q' + i);
-                    if (pn && q && (pn.value || q.value)) {
-                        currentParts.push({ pn: pn.value, q: q.value });
-                    }
-                }
-                
-                // Check if we can fit all parts after shift
-                if (currentParts.length + slotsNeeded > 17) {
-                    showToast('Cannot add oil info - maximum 17 parts reached');
-                    return;
-                }
-                
-                // Add rows as needed to fit everything
-                const rowsNeeded = currentParts.length + slotsNeeded;
-                while (partCounter < rowsNeeded) {
-                    addPartRow();
-                }
-                
-                // Shift ALL existing parts down by slotsNeeded (start from the end to avoid overwriting)
-                for (let i = currentParts.length - 1; i >= 0; i--) {
-                    const targetSlot = i + slotsNeeded + 1;
-                    const pn = document.getElementById('pn' + targetSlot);
-                    const q = document.getElementById('q' + targetSlot);
-                    if (pn && q) {
-                        pn.value = currentParts[i].pn;
-                        q.value = currentParts[i].q;
-                    }
-                }
-                
-                // Put oil info in first part
-                if (hasOilInfo) {
-                    if (pn1) pn1.value = oilType;
-                    if (q1) q1.value = oilQty;
-                }
-                
-                // Put oil filter in second part
-                if (hasOilFilter) {
-                    if (pn2) pn2.value = oilFilter;
-                    if (q2) q2.value = '1';
-                }
-                
-                // Mark as shifted
-                oilFieldsShifted = true;
-            } else {
-                // All oil fields cleared - reset flag
-                oilFieldsShifted = false;
+            }
+            
+            // Put oil info in first part
+            if (hasOilInfo) {
+                if (pn1) pn1.value = oilType;
+                if (q1) q1.value = oilQty;
+            }
+            
+            // Put oil filter in second part
+            if (hasOilFilter) {
+                if (pn2) pn2.value = oilFilter;
+                if (q2) q2.value = '1';
             }
         }
         
