@@ -4962,22 +4962,14 @@
                 const allFields = form.getFields();
                 console.log('All PDF field names:', allFields.map(f => f.getName()));
                 
-                // Cover field borders with white rectangles
-                // Draw white rectangles around each field to cover borders
+                // Remove all field borders by making them invisible
                 allFields.forEach(field => {
                     try {
                         const widgets = field.acroField.getWidgets();
                         widgets.forEach(widget => {
-                            const rect = widget.getRectangle();
-                            // Draw slightly larger white rectangle to cover borders
-                            pdfPage.drawRectangle({
-                                x: rect.x - 1,
-                                y: rect.y - 1,
-                                width: rect.width + 2,
-                                height: rect.height + 2,
-                                color: rgb(1, 1, 1), // White
-                                borderWidth: 0
-                            });
+                            // Set border color to transparent/white
+                            widget.setColor(rgb(1, 1, 1));
+                            widget.setBorderColor(rgb(1, 1, 1));
                         });
                     } catch (e) {
                         // Skip if there's an error
@@ -5034,33 +5026,50 @@
                     }
                 });
 
-                // Fill all form fields with adjusted styling
+                // Get embedded fonts
+                const helveticaFont = await pdfDoc.embedFont('Helvetica-Bold');
+                
+                // Get field positions BEFORE flattening
+                const fieldPositions = {};
                 Object.keys(fieldValues).forEach(fieldName => {
+                    if (!fieldValues[fieldName]) return;
+                    
                     try {
                         const field = form.getTextField(fieldName);
-                        if (field && fieldValues[fieldName]) {
-                            field.setText(fieldValues[fieldName]);
-                            
-                            // Set font size to 10pt
-                            try {
-                                field.setFontSize(10);
-                            } catch (e) {
-                                // Font size might already be set
-                            }
-                            
-                            // Note: Border removal not supported in this pdf-lib version
-                        }
+                        const widgets = field.acroField.getWidgets();
+                        
+                        widgets.forEach(widget => {
+                            fieldPositions[fieldName] = widget.getRectangle();
+                        });
                     } catch (e) {
-                        // Field doesn't exist or is not a text field - skip it
-                        console.log('Field not found or error:', fieldName, e.message);
+                        // Field doesn't exist - skip
                     }
                 });
-
-                // Update field appearances to apply changes
-                form.updateFieldAppearances();
                 
-                // Flatten the form to remove all interactive elements (including borders)
+                // Flatten the form to remove all borders and fields
                 form.flatten();
+                
+                // Now draw text directly on the page at the stored positions
+                Object.keys(fieldPositions).forEach(fieldName => {
+                    const rect = fieldPositions[fieldName];
+                    const text = fieldValues[fieldName];
+                    
+                    try {
+                        // Draw text directly on the page
+                        // PDF coordinates: Y increases upward, so lower Y = lower on page
+                        pdfPage.drawText(text, {
+                            x: rect.x + 4, // Padding from left edge
+                            y: rect.y + (rect.height / 2) - 3, // Center in field, then move down just slightly
+                            size: 10,
+                            font: helveticaFont,
+                            color: rgb(0, 0, 0), // Black text
+                            maxWidth: rect.width - 8, // Fit within field width with padding
+                        });
+                    } catch (e) {
+                        // Drawing failed - skip
+                        console.log('Could not draw text for:', fieldName, e.message);
+                    }
+                });
 
                 // Save the PDF
                 const pdfBytes = await pdfDoc.save();
