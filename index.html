@@ -2643,6 +2643,11 @@
         const vinInputHidden = document.getElementById('input_vin_number');
 
         function updateVinHighlight() {
+            // Prevent editing when form is locked (but allow selection for copying)
+            if (currentLockStatus === 'locked-by-other') {
+                return;
+            }
+            
             // Check if user has text selected - if so, don't mess with it
             const sel = window.getSelection();
             const hasSelection = sel.toString().length > 0;
@@ -3115,9 +3120,27 @@ function disableForm(lockedByName) {
     const form = document.getElementById('repair-order-form');
     form.querySelectorAll('input, textarea, [contenteditable]').forEach(el => {
         if (el.hasAttribute('contenteditable')) {
-            el.setAttribute('contenteditable', 'false');
-            el.style.backgroundColor = '#f0f0f0';
-            el.style.cursor = 'not-allowed';
+            // Special handling for VIN field - keep selectable but prevent editing
+            if (el.id === 'vin_editable') {
+                el.setAttribute('contenteditable', 'false');
+                el.style.cursor = 'text'; // Allow text cursor for selection
+                el.style.userSelect = 'text'; // Explicitly allow text selection
+                el.style.webkitUserSelect = 'text';
+                // Remove HTML formatting to allow proper text selection, but keep highlight via CSS
+                const vinText = el.textContent;
+                el.textContent = vinText; // Converts HTML to plain text
+                // Apply gradient background to highlight last 8 characters visually
+                if (vinText.length > 8) {
+                    const percentStart = ((vinText.length - 8) / vinText.length) * 100;
+                    el.style.background = `linear-gradient(to right, #f0f0f0 0%, #f0f0f0 ${percentStart}%, yellow ${percentStart}%, yellow 100%)`;
+                } else {
+                    el.style.backgroundColor = 'yellow';
+                }
+            } else {
+                el.setAttribute('contenteditable', 'false');
+                el.style.backgroundColor = '#f0f0f0';
+                el.style.cursor = 'not-allowed';
+            }
         } else {
             el.disabled = true;
         }
