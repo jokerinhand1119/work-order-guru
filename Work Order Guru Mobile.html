@@ -3876,85 +3876,85 @@
             const servicesPerformed = getValue('services_performed');
             const techName = getValue('tech_name');
             
-            // Get parts data
-            const partsData = getPartsData();
-            
-            // Get checkbox values
-            const getCheckbox = (id) => {
-                const el = document.getElementById(id);
-                return el ? el.checked : false;
-            };
-            
-            // Save in ORIGINAL format (all input_* fields that Work Order Guru.html uses)
-            const workOrder = {
-                // Original format fields
-                input_date: date,
-                input_ro: woNumber,
-                input_stock_: getValue('stock'),
-                input_plate_number: licensePlate,
-                input_odometer: mileage,
-                input_tech: techName,
-                input_new_s_i_number: getValue('inspection_number'),
-                input_new_s_i_exp: getValue('inspection_exp'),
-                input_customer_name: customerName,
-                input_address: address,
-                input_year_make_model_trim: `${year} ${make} ${model} ${trim}`.trim(),
-                input_vin_number: vinNumber,
-                input_engine_size: getValue('engine_size'),
-                input_description_of_work: servicesPerformed,
-                input_county: county,
-                input_brakes_lf: getValue('brakes_lf'),
-                input_brakes_rf: getValue('brakes_rf'),
-                input_brakes_lr: getValue('brakes_lr'),
-                input_brakes_rr: getValue('brakes_rr'),
-                input_tire_tread_lf: getValue('tire_tread_lf'),
-                input_tire_tread_rf: getValue('tire_tread_rf'),
-                input_tire_tread_lr: getValue('tire_tread_lr'),
-                input_tire_tread_rr: getValue('tire_tread_rr'),
-                input_tire_psi_front: getValue('tire_psi_front'),
-                input_tire_psi_rear: getValue('tire_psi_rear'),
-                input_new_s_em_number: getValue('emissions_number'),
-                input_new_s_i_date: getValue('inspection_date'),
-                input_new_state_em_date: getValue('emissions_date'),
-                input_old_s_i_exp_date: getValue('old_inspection_exp'),
-                input_old_s_i_miles: getValue('old_inspection_miles'),
-                input_oil_type: getValue('oil_type'),
-                input_oil_qty: getValue('oil_qty'),
-                input_oil_filter: getValue('oil_filter'),
-                
-                // Emissions checkboxes
-                input_chk_cat: getCheckbox('chk_cat'),
-                input_chk_fuel_rest: getCheckbox('chk_fuel_rest'),
-                input_chk_pcv: getCheckbox('chk_pcv'),
-                input_chk_egr: getCheckbox('chk_egr'),
-                input_chk_air: getCheckbox('chk_air'),
-                input_chk_evap: getCheckbox('chk_evap'),
-                
-                // Mobile format (for mobile app to read)
-                customer_name: customerName,
-                phone_number: phoneNumber,
-                work_order_number: woNumber,
-                date: date,
-                vin_number: vinNumber,
-                year: year,
-                make: make,
-                model: model,
-                mileage: mileage,
-                county: county,
-                license_plate: licensePlate,
-                services_performed: servicesPerformed,
-                tech_name: techName,
-                trim: trim,
-                oil_type: getValue('oil_type'),
-                oil_qty: getValue('oil_qty'),
-                oil_filter: getValue('oil_filter'),
-                timestamp: new Date().toISOString(),
-                ...partsData  // Spread parts data into the work order
-            };
-            
             // Get existing lock data if saving an existing work order
             database.ref('repairOrders/' + woNumber).once('value').then(snapshot => {
-                const existingData = snapshot.val();
+                const existingData = snapshot.val() || {};
+                
+                // Get parts data and preserve price/labor from existing data
+                const partsData = getPartsData(existingData);
+                
+                // Get checkbox values
+                const getCheckbox = (id) => {
+                    const el = document.getElementById(id);
+                    return el ? el.checked : false;
+                };
+                
+                // Save in ORIGINAL format (all input_* fields that Work Order Guru.html uses)
+                const workOrder = {
+                    // Original format fields
+                    input_date: date,
+                    input_ro: woNumber,
+                    input_stock_: getValue('stock'),
+                    input_plate_number: licensePlate,
+                    input_odometer: mileage,
+                    input_tech: techName,
+                    input_new_s_i_number: getValue('inspection_number'),
+                    input_new_s_i_exp: getValue('inspection_exp'),
+                    input_customer_name: customerName,
+                    input_address: address,
+                    input_year_make_model_trim: `${year} ${make} ${model} ${trim}`.trim(),
+                    input_vin_number: vinNumber,
+                    input_engine_size: getValue('engine_size'),
+                    input_description_of_work: servicesPerformed,
+                    input_county: county,
+                    input_brakes_lf: getValue('brakes_lf'),
+                    input_brakes_rf: getValue('brakes_rf'),
+                    input_brakes_lr: getValue('brakes_lr'),
+                    input_brakes_rr: getValue('brakes_rr'),
+                    input_tire_tread_lf: getValue('tire_tread_lf'),
+                    input_tire_tread_rf: getValue('tire_tread_rf'),
+                    input_tire_tread_lr: getValue('tire_tread_lr'),
+                    input_tire_tread_rr: getValue('tire_tread_rr'),
+                    input_tire_psi_front: getValue('tire_psi_front'),
+                    input_tire_psi_rear: getValue('tire_psi_rear'),
+                    input_new_s_em_number: getValue('emissions_number'),
+                    input_new_s_i_date: getValue('inspection_date'),
+                    input_new_state_em_date: getValue('emissions_date'),
+                    input_old_s_i_exp_date: getValue('old_inspection_exp'),
+                    input_old_s_i_miles: getValue('old_inspection_miles'),
+                    input_oil_type: getValue('oil_type'),
+                    input_oil_qty: getValue('oil_qty'),
+                    input_oil_filter: getValue('oil_filter'),
+                    
+                    // Emissions checkboxes
+                    input_chk_cat: getCheckbox('chk_cat'),
+                    input_chk_fuel_rest: getCheckbox('chk_fuel_rest'),
+                    input_chk_pcv: getCheckbox('chk_pcv'),
+                    input_chk_egr: getCheckbox('chk_egr'),
+                    input_chk_air: getCheckbox('chk_air'),
+                    input_chk_evap: getCheckbox('chk_evap'),
+                    
+                    // Mobile format (for mobile app to read)
+                    customer_name: customerName,
+                    phone_number: phoneNumber,
+                    work_order_number: woNumber,
+                    date: date,
+                    vin_number: vinNumber,
+                    year: year,
+                    make: make,
+                    model: model,
+                    mileage: mileage,
+                    county: county,
+                    license_plate: licensePlate,
+                    services_performed: servicesPerformed,
+                    tech_name: techName,
+                    trim: trim,
+                    oil_type: getValue('oil_type'),
+                    oil_qty: getValue('oil_qty'),
+                    oil_filter: getValue('oil_filter'),
+                    timestamp: new Date().toISOString(),
+                    ...partsData  // Spread parts data (includes preserved price/labor) into the work order
+                };
                 
                 // Preserve lock data if it exists and it's ours
                 if (existingData && existingData.lockedBy === myDeviceId) {
@@ -4156,20 +4156,49 @@
             }
         }
         
-        function getPartsData() {
+        function getPartsData(existingData = {}) {
             const partsData = {};
-            for (let i = 1; i <= 17; i++) {
+            
+            // Loop through all 22 rows (desktop supports 22, mobile only shows up to 17)
+            for (let i = 1; i <= 22; i++) {
+                // Try to get mobile fields (only exist for rows 1-17)
                 const qField = document.getElementById('q' + i);
                 const pnField = document.getElementById('pn' + i);
+                
+                // Save quantity if exists in mobile form
                 if (qField && qField.value) {
                     partsData['input_q' + i] = qField.value;
                     partsData['q' + i] = qField.value;
+                    partsData['qty' + i] = qField.value; // Desktop format
+                } else if (existingData['qty' + i] || existingData['input_q' + i]) {
+                    // Preserve existing quantity if not in mobile form
+                    partsData['qty' + i] = existingData['qty' + i] || existingData['input_q' + i] || '';
+                    partsData['input_q' + i] = existingData['qty' + i] || existingData['input_q' + i] || '';
                 }
+                
+                // Save part number if exists in mobile form
                 if (pnField && pnField.value) {
                     partsData['input_pn' + i] = pnField.value;
                     partsData['pn' + i] = pnField.value;
+                    partsData['part' + i] = pnField.value; // Desktop format
+                } else if (existingData['part' + i] || existingData['input_pn' + i]) {
+                    // Preserve existing part number if not in mobile form
+                    partsData['part' + i] = existingData['part' + i] || existingData['input_pn' + i] || '';
+                    partsData['input_pn' + i] = existingData['part' + i] || existingData['input_pn' + i] || '';
+                }
+                
+                // PRESERVE price and labor from desktop (mobile doesn't have these fields)
+                if (existingData['price' + i] || existingData['input_price' + i]) {
+                    partsData['price' + i] = existingData['price' + i] || existingData['input_price' + i] || '';
+                    partsData['input_price' + i] = existingData['price' + i] || existingData['input_price' + i] || '';
+                }
+                
+                if (existingData['labor' + i] || existingData['input_labor' + i]) {
+                    partsData['labor' + i] = existingData['labor' + i] || existingData['input_labor' + i] || '';
+                    partsData['input_labor' + i] = existingData['labor' + i] || existingData['input_labor' + i] || '';
                 }
             }
+            
             return partsData;
         }
         
