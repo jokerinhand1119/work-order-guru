@@ -57,6 +57,9 @@
     <!-- Barcode Scanner Library -->
     <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
     
+    <!-- ZXing Barcode Scanner for iOS Support -->
+    <script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
+    
     <style>
         /* ===== MOBILE UI STYLES (Screen Only) ===== */
         @media screen {
@@ -2108,6 +2111,7 @@
         
         async function openScanner() {
             const overlay = document.getElementById('scanner-overlay');
+            const scanStatus = document.getElementById('scan-status');
             overlay.classList.add('active');
             scannerActive = true;
             
@@ -2115,50 +2119,148 @@
             container.innerHTML = '';
             
             const video = document.createElement('video');
-            video.setAttribute('playsinline', '');
+            video.setAttribute('playsinline', ''); // Critical for iOS
             video.setAttribute('autoplay', '');
+            video.setAttribute('muted', ''); // iOS requires muted for autoplay
+            video.style.width = '100%';
+            video.style.height = '100%';
+            video.style.objectFit = 'cover';
             container.appendChild(video);
             
             try {
+                const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
                 const isAndroid = /Android/i.test(navigator.userAgent);
                 const isFireTablet = /KFOT|KFTT|KFJWI|KFJWA|KFSOWI|KFTHWI|KFTHWA|KFAPWI|KFAPWA|WFJWAE|KFARWI|KFASWI|KFSAWI|KFSAWA/i.test(navigator.userAgent);
                 
-                // Adaptive resolution based on device
-                let videoWidth, videoHeight;
-                if (isFireTablet) {
-                    // Fire tablets: Lower resolution for better compatibility
-                    videoWidth = 640;
-                    videoHeight = 480;
+                // Detect Android tablet (not phone) - tablets have larger screens
+                const isAndroidTablet = isAndroid && (
+                    window.innerWidth >= 600 || // Tablet-sized screen
+                    /tablet|tab/i.test(navigator.userAgent) || // Explicit tablet in UA
+                    (window.devicePixelRatio && window.devicePixelRatio < 2 && window.innerWidth > 500) // Lower DPI large screen
+                );
+                
+                scanStatus.textContent = 'Requesting camera access...';
+                
+                // Camera constraints optimized per device type
+                let constraints;
+                if (isIOS) {
+                    // iOS Safari needs simpler constraints
+                    constraints = {
+                        video: {
+                            facingMode: { exact: 'environment' },
+                            width: { ideal: 1920 },
+                            height: { ideal: 1080 }
+                        },
+                        audio: false
+                    };
+                } else if (isFireTablet || isAndroidTablet) {
+                    // Tablets: Lower resolution for MUCH faster scanning (barcode doesn't need HD)
+                    // 640x480 is perfect for barcodes - faster processing, less battery drain
+                    constraints = {
+                        video: {
+                            facingMode: 'environment',
+                            width: { ideal: 640, max: 800 },
+                            height: { ideal: 480, max: 600 }
+                        },
+                        audio: false
+                    };
+                    scanStatus.textContent = 'Requesting camera (tablet mode)...';
                 } else if (isAndroid) {
-                    // Other Android: Medium resolution
-                    videoWidth = 1280;
-                    videoHeight = 720;
+                    // Android phones: Medium resolution (good balance)
+                    constraints = {
+                        video: {
+                            facingMode: 'environment',
+                            width: { ideal: 1280, min: 640 },
+                            height: { ideal: 720, min: 480 }
+                        },
+                        audio: false
+                    };
                 } else {
-                    // iOS/newer devices: High resolution
-                    videoWidth = 1920;
-                    videoHeight = 1080;
+                    // Desktop/other devices
+                    constraints = {
+                        video: {
+                            facingMode: 'environment',
+                            width: { ideal: 1920, min: 640 },
+                            height: { ideal: 1080, min: 480 }
+                        },
+                        audio: false
+                    };
                 }
                 
-                videoStream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: 'environment',
-                        width: { ideal: videoWidth, min: 640 },
-                        height: { ideal: videoHeight, min: 480 }
-                    }
-                });
+                // Try to get user media
+                videoStream = await navigator.mediaDevices.getUserMedia(constraints);
                 
                 video.srcObject = videoStream;
-                await video.play();
                 
+                // Wait for video to be ready (critical for iOS)
+                await new Promise((resolve, reject) => {
+                    video.onloadedmetadata = () => {
+                        video.play()
+                            .then(resolve)
+                            .catch(reject);
+                    };
+                    video.onerror = reject;
+                });
+                
+                scanStatus.textContent = 'Camera ready! Scanning...';
+                
+                // Check if BarcodeDetector is available
                 if ('BarcodeDetector' in window) {
+                    // Use native BarcodeDetector (fast - Android/Chrome)
                     startBarcodeScanning(video);
+                } else if (typeof ZXing !== 'undefined') {
+                    // Use ZXing library for iOS/Safari
+                    scanStatus.textContent = 'Camera ready! Scanning (iOS mode)...';
+                    startZXingScanning(video);
                 } else {
-                    showToast('Barcode scanner not supported on this device');
-                    closeScanner();
+                    // No barcode support available - manual entry only
+                    scanStatus.textContent = '❌ Barcode scanner not supported on this device';
+                    showToast('⚠️ Scanner not available. Please enter VIN manually.');
+                    setTimeout(() => closeScanner(), 3000);
                 }
             } catch (err) {
-                showToast('Camera access denied');
-                closeScanner();
+                console.error('Camera error:', err);
+                let errorMsg = 'Camera access denied';
+                
+                // Specific error messages for iOS
+                if (err.name === 'NotAllowedError') {
+                    errorMsg = 'Camera permission denied. Enable in Settings > Safari > Camera';
+                } else if (err.name === 'NotFoundError') {
+                    errorMsg = 'No camera found on this device';
+                } else if (err.name === 'NotReadableError') {
+                    errorMsg = 'Camera is already in use by another app';
+                } else if (err.name === 'OverconstrainedError') {
+                    errorMsg = 'Camera settings not supported. Trying fallback...';
+                    
+                    // Try again with minimal constraints for iOS
+                    try {
+                        scanStatus.textContent = 'Retrying with basic settings...';
+                        videoStream = await navigator.mediaDevices.getUserMedia({
+                            video: { facingMode: 'environment' },
+                            audio: false
+                        });
+                        video.srcObject = videoStream;
+                        await video.play();
+                        scanStatus.textContent = 'Camera ready! Scanning...';
+                        
+                        if ('BarcodeDetector' in window) {
+                            startBarcodeScanning(video);
+                        } else if (typeof ZXing !== 'undefined') {
+                            startZXingScanning(video);
+                        } else {
+                            showToast('⚠️ Barcode scanner not supported. Enter VIN manually.');
+                            setTimeout(() => closeScanner(), 3000);
+                        }
+                        return; // Success on retry
+                    } catch (retryErr) {
+                        console.error('Retry failed:', retryErr);
+                        errorMsg = 'Camera initialization failed';
+                    }
+                }
+                
+                scanStatus.textContent = '❌ ' + errorMsg;
+                showToast(errorMsg);
+                setTimeout(() => closeScanner(), 3000);
             }
         }
         
@@ -2166,13 +2268,27 @@
             scannerActive = false;
             partScannerActive = false;
             document.getElementById('scanner-overlay').classList.remove('active');
+            
+            // Stop video stream
             if (videoStream) {
                 videoStream.getTracks().forEach(track => track.stop());
                 videoStream = null;
             }
+            
+            // Stop scanning interval
             if (scanningInterval) {
                 clearInterval(scanningInterval);
                 scanningInterval = null;
+            }
+            
+            // Reset ZXing reader if it exists (memory cleanup for iOS)
+            try {
+                if (typeof ZXing !== 'undefined' && ZXing.BrowserMultiFormatReader) {
+                    const reader = new ZXing.BrowserMultiFormatReader();
+                    reader.reset();
+                }
+            } catch (e) {
+                // Ignore cleanup errors
             }
         }
         
@@ -2183,11 +2299,49 @@
             const scanStatus = document.getElementById('scan-status');
             scanStatus.textContent = 'Ready to scan VIN barcode or QR code...';
             
+            // Detect if we're on a tablet for performance optimization
+            const isAndroid = /Android/i.test(navigator.userAgent);
+            const isTablet = (window.innerWidth >= 600 || /tablet|tab/i.test(navigator.userAgent));
+            const scanInterval = (isAndroid && isTablet) ? 200 : 100; // Slower scan on tablets (less CPU usage)
+            
+            // Create canvas for image inversion (helps with inverted barcodes - white on black)
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
             scanningInterval = setInterval(async () => {
                 if (!scannerActive) return;
                 
                 try {
-                    const barcodes = await barcodeDetector.detect(video);
+                    // First, try scanning the original video frame
+                    let barcodes = await barcodeDetector.detect(video);
+                    
+                    // If no barcode found, try with inverted colors (for white barcodes on black background)
+                    if (barcodes.length === 0) {
+                        // Set canvas size to match video
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        
+                        // Draw video frame to canvas
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        
+                        // Get image data and invert colors
+                        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                        const data = imageData.data;
+                        for (let i = 0; i < data.length; i += 4) {
+                            data[i] = 255 - data[i];         // Invert red
+                            data[i + 1] = 255 - data[i + 1]; // Invert green
+                            data[i + 2] = 255 - data[i + 2]; // Invert blue
+                            // Keep alpha (data[i + 3]) unchanged
+                        }
+                        ctx.putImageData(imageData, 0, 0);
+                        
+                        // Try detecting on inverted image
+                        barcodes = await barcodeDetector.detect(canvas);
+                        if (barcodes.length > 0) {
+                            scanStatus.textContent = 'Inverted barcode detected...';
+                        }
+                    }
+                    
                     if (barcodes.length > 0) {
                         for (const barcode of barcodes) {
                             let rawCode = barcode.rawValue.toUpperCase().trim();
@@ -2232,7 +2386,130 @@
                 } catch (err) {
                     console.error('Scan error:', err);
                 }
-            }, 100);
+            }, scanInterval); // Use dynamic interval based on device
+        }
+        
+        // ZXing barcode scanning for iOS devices (BarcodeDetector not supported on iOS)
+        async function startZXingScanning(video) {
+            const scanStatus = document.getElementById('scan-status');
+            
+            // Detect tablet for performance optimization
+            const isTablet = (window.innerWidth >= 600 || /tablet|tab|iPad/i.test(navigator.userAgent));
+            const scanInterval = isTablet ? 250 : 150; // Even slower on tablets for ZXing (more CPU intensive)
+            
+            try {
+                // Initialize ZXing code reader with VIN-compatible formats
+                const codeReader = new ZXing.BrowserMultiFormatReader();
+                
+                // Create canvas for image processing (including inversion)
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                scanStatus.textContent = 'Ready to scan VIN (iOS mode)...';
+                
+                // Continuous scanning loop
+                scanningInterval = setInterval(async () => {
+                    if (!scannerActive) {
+                        codeReader.reset();
+                        return;
+                    }
+                    
+                    try {
+                        // Set canvas size to match video
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        
+                        if (canvas.width === 0 || canvas.height === 0) return; // Video not ready yet
+                        
+                        // Draw current video frame to canvas
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        
+                        // Try scanning normal image first
+                        let result = null;
+                        try {
+                            result = await codeReader.decodeFromCanvas(canvas);
+                        } catch (normalErr) {
+                            // Normal scan failed - try with inverted image for white-on-black barcodes
+                            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                            const data = imageData.data;
+                            
+                            // Invert colors
+                            for (let i = 0; i < data.length; i += 4) {
+                                data[i] = 255 - data[i];         // Invert red
+                                data[i + 1] = 255 - data[i + 1]; // Invert green
+                                data[i + 2] = 255 - data[i + 2]; // Invert blue
+                            }
+                            ctx.putImageData(imageData, 0, 0);
+                            
+                            try {
+                                result = await codeReader.decodeFromCanvas(canvas);
+                                if (result) {
+                                    scanStatus.textContent = 'Inverted barcode detected...';
+                                }
+                            } catch (invertedErr) {
+                                // Both attempts failed - continue scanning
+                                return;
+                            }
+                        }
+                        
+                        if (result && result.text) {
+                            let rawCode = result.text.toUpperCase().trim();
+                            
+                            // Try to extract VIN from the barcode data
+                            let vinMatch = rawCode.match(/\b([A-HJ-NPR-Z0-9]{17})\b/);
+                            if (vinMatch) {
+                                scanStatus.textContent = '✓ VIN Found!';
+                                const vin = vinMatch[1];
+                                document.getElementById('vin_number').value = vin;
+                                
+                                // Stop scanning
+                                clearInterval(scanningInterval);
+                                scanningInterval = null;
+                                codeReader.reset();
+                                
+                                closeScanner();
+                                showToast('VIN scanned successfully!');
+                                decodeVIN(vin);
+                                return;
+                            }
+                            
+                            // If no VIN pattern found, try cleaning the code
+                            let code = rawCode.replace(/[^A-HJ-NPR-Z0-9]/g, '');
+                            
+                            scanStatus.textContent = 'Reading: ' + code.substring(0, 15);
+                            
+                            // Handle 18-char codes (strip first digit)
+                            if (code.length === 18) {
+                                code = code.substring(1);
+                            }
+                            
+                            if (code.length === 17 && /^[A-HJ-NPR-Z0-9]{17}$/.test(code)) {
+                                scanStatus.textContent = '✓ VIN Found!';
+                                document.getElementById('vin_number').value = code;
+                                
+                                // Stop scanning
+                                clearInterval(scanningInterval);
+                                scanningInterval = null;
+                                codeReader.reset();
+                                
+                                closeScanner();
+                                showToast('VIN scanned successfully!');
+                                decodeVIN(code);
+                                return;
+                            }
+                        }
+                    } catch (err) {
+                        // Scanning error - continue to next frame
+                        // Don't log every frame error to avoid console spam
+                    }
+                }, scanInterval); // Use dynamic interval - slower on tablets for performance
+                
+            } catch (err) {
+                console.error('ZXing initialization error:', err);
+                scanStatus.textContent = '❌ Scanner initialization failed';
+                showToast('Scanner error. Please enter VIN manually.');
+                setTimeout(() => closeScanner(), 3000);
+            }
         }
         
         // Recall Checker
