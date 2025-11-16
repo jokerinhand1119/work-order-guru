@@ -1507,19 +1507,17 @@
             </div>
             <div class="section-content">
                 <div class="section-body">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label class="form-label">VIN Number</label>
-                            <div class="form-input-group">
-                                <input type="text" class="form-input has-icon" id="vin_number" placeholder="Scan or enter VIN" maxlength="17">
-                                <button class="input-icon" onclick="copyVinToClipboard()" style="right: 56px; background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);">📄</button>
-                                <button class="input-icon" onclick="openScanner()" style="right: 8px;">📷</button>
-                            </div>
+                    <div class="form-group">
+                        <label class="form-label">VIN Number</label>
+                        <div class="form-input-group">
+                            <input type="text" class="form-input has-icon" id="vin_number" placeholder="Scan or enter VIN" maxlength="17">
+                            <button class="input-icon" onclick="copyVinToClipboard()" style="right: 56px; background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);">📄</button>
+                            <button class="input-icon" onclick="openScanner()" style="right: 8px;">📷</button>
                         </div>
-                        <div class="form-group">
-                            <label class="form-label">Mfg Date</label>
-                            <input type="text" class="form-input" id="mfg_date" placeholder="MM/YYYY">
-                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Mfg Date</label>
+                        <input type="text" class="form-input" id="mfg_date" placeholder="MM/YYYY">
                     </div>
                     <div class="form-group">
                         <button class="form-input" style="background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%); color: white; font-weight: 700; cursor: pointer; border: none; box-shadow: 0 4px 16px rgba(255, 152, 0, 0.3); transition: all 0.3s; font-size: 16px;" onclick="checkRecalls()" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(255, 152, 0, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 16px rgba(255, 152, 0, 0.3)'">⚠️ Check for Recalls</button>
