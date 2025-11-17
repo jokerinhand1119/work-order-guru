@@ -4471,6 +4471,16 @@
             const servicesPerformed = getValue('services_performed');
             const techName = getValue('tech_name');
             
+            // Auto-calculate labor hours from timer if not manually entered
+            let laborHours = getValue('labor_hours');
+            if (!laborHours && timerPausedSeconds > 0) {
+                // Timer has accumulated time but labor_hours field is empty
+                // Auto-fill from paused time
+                laborHours = (timerPausedSeconds / 3600).toFixed(2);
+                const laborField = document.getElementById('labor_hours');
+                if (laborField) laborField.value = laborHours;
+            }
+            
             // Get existing lock data if saving an existing work order
             database.ref('repairOrders/' + woNumber).once('value').then(snapshot => {
                 const existingData = snapshot.val() || {};
@@ -4545,6 +4555,8 @@
                     license_plate: licensePlate,
                     services_performed: servicesPerformed,
                     tech_name: techName,
+                    tech_notes: getValue('tech_notes'),
+                    labor_hours: laborHours || getValue('labor_hours'),
                     trim: trim,
                     oil_type: getValue('oil_type'),
                     oil_qty: getValue('oil_qty'),
@@ -4559,6 +4571,13 @@
                     workOrder.lockedByName = existingData.lockedByName;
                     workOrder.lockedAt = existingData.lockedAt;
                     workOrder.lockHeartbeat = firebase.database.ServerValue.TIMESTAMP; // Update heartbeat
+                }
+                
+                // Preserve active timer state to prevent reset on save
+                if (existingData && existingData.timerActive) {
+                    workOrder.timerActive = existingData.timerActive;
+                    workOrder.timerStartTime = existingData.timerStartTime;
+                    workOrder.timerPausedSeconds = existingData.timerPausedSeconds;
                 }
                 
                 return database.ref('repairOrders/' + woNumber).set(workOrder);
@@ -5120,6 +5139,8 @@
             setValue('oil_type', data.input_oil_type || data.oil_type);
             setValue('oil_qty', data.input_oil_qty || data.oil_qty);
             setValue('oil_filter', data.input_oil_filter || data.oil_filter);
+            setValue('tech_notes', data.tech_notes || '');
+            setValue('labor_hours', data.labor_hours || '');
             
             // Load checkboxes
             const setCheckbox = (id, value) => {
