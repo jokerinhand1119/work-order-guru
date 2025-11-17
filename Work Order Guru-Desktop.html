@@ -1139,9 +1139,160 @@
         }
 
         @media print {
-            .no-print {
-                display: none;
+            .no-print,
+            #labor-timer-widget {
+                display: none !important;
             }
+        }
+        
+        /* Labor Timer Widget */
+        #labor-timer-widget {
+            position: fixed;
+            top: 80px;
+            left: 20px;
+            width: 280px;
+            background: #1e1e1e;
+            border: 2px solid #00bfff;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 191, 255, 0.3);
+            z-index: 9999;
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            cursor: move;
+        }
+        
+        #labor-timer-widget.minimized {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            overflow: hidden;
+        }
+        
+        #labor-timer-widget.minimized .widget-content {
+            display: none;
+        }
+        
+        #labor-timer-widget.minimized .widget-header {
+            height: 60px;
+            justify-content: center;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        
+        #labor-timer-widget.minimized .widget-header h3 {
+            display: none;
+        }
+        
+        #labor-timer-widget.minimized .minimize-btn {
+            font-size: 24px;
+            margin: 0;
+        }
+        
+        .widget-header {
+            background: linear-gradient(135deg, #00bfff 0%, #0088cc 100%);
+            padding: 10px 15px;
+            border-radius: 6px 6px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+        }
+        
+        .widget-header h3 {
+            margin: 0;
+            color: white;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        
+        .minimize-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 0;
+            width: 24px;
+            height: 24px;
+            line-height: 24px;
+            text-align: center;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+        
+        .minimize-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .widget-content {
+            padding: 15px;
+        }
+        
+        .labor-hours-display {
+            background: #2d2d2d;
+            border: 1px solid #444;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 15px;
+        }
+        
+        .labor-hours-display label {
+            display: block;
+            color: #00bfff;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+            letter-spacing: 0.5px;
+        }
+        
+        .labor-hours-value {
+            color: #00ff88;
+            font-size: 20px;
+            font-weight: 700;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .labor-hours-subtitle {
+            color: #888;
+            font-size: 10px;
+            margin-top: 4px;
+        }
+        
+        .tech-notes-section label {
+            display: block;
+            color: #00bfff;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+            letter-spacing: 0.5px;
+        }
+        
+        #tech_notes_widget {
+            width: 100%;
+            height: 120px;
+            background: #2d2d2d;
+            border: 1px solid #444;
+            border-radius: 6px;
+            padding: 10px;
+            color: #fff;
+            font-size: 13px;
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            resize: vertical;
+            outline: none;
+        }
+        
+        #tech_notes_widget:focus {
+            border-color: #00bfff;
+            box-shadow: 0 0 0 2px rgba(0, 191, 255, 0.2);
+        }
+        
+        .widget-save-status {
+            color: #00ff88;
+            font-size: 10px;
+            margin-top: 6px;
+            text-align: right;
+            min-height: 14px;
         }
 
         /* Login Screen Styles */
@@ -1747,6 +1898,26 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Labor Timer Widget -->
+    <div id="labor-timer-widget">
+        <div class="widget-header">
+            <h3>⏱ Labor & Notes</h3>
+            <button class="minimize-btn" onclick="toggleWidget()">−</button>
+        </div>
+        <div class="widget-content">
+            <div class="labor-hours-display">
+                <label>⏱ Labor Hours</label>
+                <div class="labor-hours-value" id="labor_hours_display">0.0 hrs</div>
+                <div class="labor-hours-subtitle">(from mobile timer)</div>
+            </div>
+            <div class="tech-notes-section">
+                <label>📝 Tech Notes</label>
+                <textarea id="tech_notes_widget" placeholder="Enter technician notes..."></textarea>
+                <div class="widget-save-status" id="widget_save_status"></div>
             </div>
         </div>
     </div>
@@ -4192,6 +4363,10 @@ function loadWorkOrderData(entry) {
         'old_si_miles': 'old_si_miles',
         'input_old_s_i_miles': 'old_si_miles',  // OLD FORMAT
         
+        // Labor timer fields (from mobile)
+        'labor_hours': 'labor_hours',
+        'tech_notes': 'tech_notes',
+        
         // Pricing fields
         'parts_subtotal': 'parts_subtotal',
         'input_parts_subtotal': 'parts_subtotal',  // OLD FORMAT
@@ -4323,6 +4498,19 @@ function loadWorkOrderData(entry) {
         } else if (entry.input_vin_number !== undefined) {
             vinField.value = entry.input_vin_number;  // OLD FORMAT
         }
+    }
+    
+    // Update labor timer widget
+    const laborHoursDisplay = document.getElementById('labor_hours_display');
+    const techNotesWidget = document.getElementById('tech_notes_widget');
+    
+    if (laborHoursDisplay) {
+        const laborHours = entry.labor_hours || '0.0';
+        laborHoursDisplay.textContent = laborHours + ' hrs';
+    }
+    
+    if (techNotesWidget) {
+        techNotesWidget.value = entry.tech_notes || '';
     }
     
     // Update timestamp
@@ -5079,6 +5267,15 @@ saveBtn.addEventListener('click', function() {
         }
     });
     
+    // Collect labor timer widget data
+    const techNotesWidget = document.getElementById('tech_notes_widget');
+    if (techNotesWidget) {
+        data.tech_notes = techNotesWidget.value || '';
+    }
+    
+    // Note: labor_hours is read-only (comes from mobile timer), so we don't save it here
+    // It will be preserved from existing data when updating
+    
     // ADD OLD FORMAT FIELDS for backward compatibility with mobile and old system
     // Header fields
     data.input_date = data.date || '';
@@ -5175,6 +5372,11 @@ saveBtn.addEventListener('click', function() {
             const exists = snapshot.exists();
             const existingData = snapshot.val() || {};
             
+            // Preserve labor_hours from mobile timer (don't overwrite with desktop data)
+            if (existingData.labor_hours !== undefined) {
+                data.labor_hours = existingData.labor_hours;
+            }
+            
             // Preserve lock data if we have it
             if (currentLockStatus === 'locked-by-me') {
                 data.lockedBy = myDeviceId;
@@ -5221,15 +5423,136 @@ saveBtn.addEventListener('click', function() {
     } catch (e) {
         status.textContent = 'Save failed!';
         status.style.color = '#dc3545';
-        console.error('Save button error:', e);
-    }
-});
+                console.error('Save button error:', e);
+        }
+    });
+    </script>
+
+    <script>
+        // Labor Timer Widget Functionality
+        let widgetSaveTimeout = null;
+        
+        // Toggle widget minimize/maximize
+        function toggleWidget() {
+            const widget = document.getElementById('labor-timer-widget');
+            const btn = widget.querySelector('.minimize-btn');
+            
+            if (widget.classList.contains('minimized')) {
+                widget.classList.remove('minimized');
+                btn.textContent = '−';
+            } else {
+                widget.classList.add('minimized');
+                btn.textContent = '⏱';
+            }
+        }
+        
+        // Make widget draggable
+        const widget = document.getElementById('labor-timer-widget');
+        let isDragging = false;
+        let currentX;
+        let currentY;
+        let initialX;
+        let initialY;
+        let xOffset = 0;
+        let yOffset = 0;
+        
+        const header = widget.querySelector('.widget-header');
+        
+        header.addEventListener('mousedown', dragStart);
+        document.addEventListener('mousemove', drag);
+        document.addEventListener('mouseup', dragEnd);
+        
+        function dragStart(e) {
+            // Don't drag if clicking minimize button
+            if (e.target.classList.contains('minimize-btn')) return;
+            
+            initialX = e.clientX - xOffset;
+            initialY = e.clientY - yOffset;
+            
+            if (e.target === header || e.target.tagName === 'H3') {
+                isDragging = true;
+            }
+        }
+        
+        function drag(e) {
+            if (isDragging) {
+                e.preventDefault();
+                
+                currentX = e.clientX - initialX;
+                currentY = e.clientY - initialY;
+                
+                xOffset = currentX;
+                yOffset = currentY;
+                
+                setTranslate(currentX, currentY, widget);
+            }
+        }
+        
+        function dragEnd(e) {
+            initialX = currentX;
+            initialY = currentY;
+            isDragging = false;
+        }
+        
+        function setTranslate(xPos, yPos, el) {
+            el.style.transform = `translate3d(${xPos}px, ${yPos}px, 0)`;
+        }
+        
+        // Auto-save tech notes
+        const techNotesWidget = document.getElementById('tech_notes_widget');
+        const widgetSaveStatus = document.getElementById('widget_save_status');
+        
+        if (techNotesWidget) {
+            techNotesWidget.addEventListener('input', function() {
+                // Clear previous timeout
+                if (widgetSaveTimeout) clearTimeout(widgetSaveTimeout);
+                
+                // Show typing indicator
+                widgetSaveStatus.textContent = 'typing...';
+                widgetSaveStatus.style.color = '#888';
+                
+                // Auto-save after 1 second of no typing
+                widgetSaveTimeout = setTimeout(() => {
+                    saveWidgetNotes();
+                }, 1000);
+            });
+            
+            // Also save on blur (when user clicks away)
+            techNotesWidget.addEventListener('blur', function() {
+                if (widgetSaveTimeout) clearTimeout(widgetSaveTimeout);
+                saveWidgetNotes();
+            });
+        }
+        
+        function saveWidgetNotes() {
+            const woNumber = currentWorkOrderNumber || currentEditKey;
+            
+            if (!woNumber) {
+                widgetSaveStatus.textContent = '';
+                return;
+            }
+            
+            const notes = techNotesWidget.value || '';
+            
+            // Save just the tech_notes field (don't overwrite entire work order)
+            db.ref('repairOrders/' + woNumber + '/tech_notes').set(notes).then(() => {
+                widgetSaveStatus.textContent = '✓ saved';
+                widgetSaveStatus.style.color = '#00ff88';
+                
+                // Clear status after 2 seconds
+                setTimeout(() => {
+                    widgetSaveStatus.textContent = '';
+                }, 2000);
+            }).catch(err => {
+                widgetSaveStatus.textContent = '✗ error';
+                widgetSaveStatus.style.color = '#ff4757';
+                console.error('Error saving notes:', err);
+            });
+        }
     </script>
 
 </body>
 </html>
-
-
 
 
 
