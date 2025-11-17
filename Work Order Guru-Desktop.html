@@ -189,6 +189,38 @@
         #force-unlock-btn.visible {
             display: inline-block;
         }
+        
+        /* VIN Hover Overlay Styles */
+        .vin-overlay {
+            position: absolute;
+            background: #fff;
+            border: 2px solid #333;
+            padding: 10px 15px;
+            border-radius: 5px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            z-index: 10000;
+            font-size: 18px;
+            font-family: 'Courier New', monospace;
+            letter-spacing: 1px;
+            white-space: nowrap;
+            pointer-events: none;
+            display: none;
+        }
+        
+        .vin-overlay.show {
+            display: block;
+        }
+        
+        .vin-first-part {
+            font-weight: normal;
+            color: #666;
+        }
+        
+        .vin-last-eight {
+            font-weight: bold;
+            color: #000;
+            font-size: 20px;
+        }
 
         #bottom-bar {
             position: fixed;
@@ -1939,6 +1971,9 @@
         </div>
     </div>
 
+    <!-- VIN Hover Overlay -->
+    <div id="vin-overlay" class="vin-overlay"></div>
+
     <!-- VIN Scanner Camera Overlay -->
     <div id="scanner-overlay">
         <div class="scanner-header">
@@ -3424,6 +3459,28 @@
         vinField.addEventListener('focus', function() {
             // Auto-select VIN for easy copying when clicked
             this.select();
+        });
+        
+        // VIN hover overlay to show last 8 characters in bold
+        const vinOverlay = document.getElementById('vin-overlay');
+        
+        vinField.addEventListener('mouseenter', function(e) {
+            const vin = this.value.trim();
+            if (vin.length >= 8) {
+                const firstPart = vin.substring(0, vin.length - 8);
+                const lastEight = vin.substring(vin.length - 8);
+                
+                vinOverlay.innerHTML = `<span class="vin-first-part">${firstPart}</span><span class="vin-last-eight">${lastEight}</span>`;
+                
+                const rect = this.getBoundingClientRect();
+                vinOverlay.style.left = rect.left + 'px';
+                vinOverlay.style.top = (rect.bottom + 5) + 'px';
+                vinOverlay.classList.add('show');
+            }
+        });
+        
+        vinField.addEventListener('mouseleave', function() {
+            vinOverlay.classList.remove('show');
         });
     </script>
 
