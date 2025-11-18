@@ -9,16 +9,16 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' fill='%230ea5e9' rx='24'/%3E%3Cpath d='M85 45 L85 75 L65 75 L65 95 L95 95 L95 75 L115 75 L140 50 L135 45 Z M75 105 L45 135 L57 147 L87 117 Z' fill='%23fff' stroke='%23fff' stroke-width='3' stroke-linejoin='round'/%3E%3C/svg%3E",
+      "src": "wrench icon.jpg",
       "sizes": "192x192",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "type": "image/jpeg",
+      "purpose": "any"
     },
     {
-      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' fill='%230ea5e9' rx='64'/%3E%3Cpath d='M230 120 L230 200 L175 200 L175 255 L255 255 L255 200 L310 200 L375 135 L365 125 Z M200 280 L120 360 L152 392 L232 312 Z' fill='%23fff' stroke='%23fff' stroke-width='8' stroke-linejoin='round'/%3E%3C/svg%3E",
+      "src": "wrench icon.jpg",
       "sizes": "512x512",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "type": "image/jpeg",
+      "purpose": "any"
     }
   ]
 }
