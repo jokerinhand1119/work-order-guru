@@ -10,15 +10,9 @@
   "icons": [
     {
       "src": "wrench icon.jpg",
-      "sizes": "192x192",
+      "sizes": "any",
       "type": "image/jpeg",
-      "purpose": "any"
-    },
-    {
-      "src": "wrench icon.jpg",
-      "sizes": "512x512",
-      "type": "image/jpeg",
-      "purpose": "any"
+      "purpose": "any maskable"
     }
   ]
 }
