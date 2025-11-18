@@ -3555,8 +3555,11 @@
                     const yearCode = vin.charAt(9);
                     // Try to get plant info from NHTSA data
                     let mfgDate = '';
+                    // Format: month/year (country) e.g., "4/15 (Mexico)"
+                    // Since NHTSA doesn't provide month, use year with last 2 digits
                     if (vehicleInfo['Model Year']) {
-                        mfgDate = vehicleInfo['Model Year'];
+                        const yearShort = vehicleInfo['Model Year'].toString().slice(-2);
+                        mfgDate = yearShort; // Just year (e.g., "15" for 2015)
                     }
                     // Add plant country if available
                     if (vehicleInfo['Plant Country']) {
@@ -5255,6 +5258,7 @@ saveBtn.addEventListener('click', function() {
     const trimVal = data.trim || '';
     data.input_year_make_model_trim = `${yearVal} ${makeVal} ${modelVal} ${trimVal}`.trim();
     data.input_engine_size = data.engine_size || '';
+    data.input_mfg_date = data.mfg_date || '';  // Add backward compatibility for mfg_date
     
     // Description
     data.input_description_of_work = data.description || '';
