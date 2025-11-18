@@ -1,0 +1,22 @@
+{
+  "name": "TOOLKIT - Technician Operations Launcher",
+  "short_name": "TOOLKIT",
+  "description": "Technician-Oriented Operations Launcher for Knowledge, Integration and Tools",
+  "start_url": "./TOOLKIT-Desktop.html",
+  "display": "standalone",
+  "background_color": "#1a1a2e",
+  "theme_color": "#0ea5e9",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "wrench icon.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    },
+    {
+      "src": "wrench icon.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg"
+    }
+  ]
+}
