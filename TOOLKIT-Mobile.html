@@ -4372,57 +4372,98 @@
             const prefix = month + year; // e.g., "1025" for October 2025
             
             try {
-                // Get all work orders from Firebase
+                // Clean up old reservations (older than 30 minutes)
                 const snapshot = await database.ref('repairOrders').once('value');
-                let maxCounter = 0;
+                const thirtyMinutesAgo = Date.now() - (30 * 60 * 1000);
+                const cleanupPromises = [];
                 
-                // Find the highest counter for this month/year
                 snapshot.forEach((child) => {
-                    const woNum = child.key;
-                    // Check if it matches our format (starts with current month/year prefix)
-                    if (woNum && woNum.startsWith(prefix)) {
-                        const counter = parseInt(woNum.slice(4), 10); // Get last 3 digits
-                        if (!isNaN(counter) && counter > maxCounter) {
-                            maxCounter = counter;
+                    const data = child.val();
+                    if (data && data._reserved && data._reservedAt) {
+                        if (data._reservedAt < thirtyMinutesAgo) {
+                            console.log('🧹 Cleaning up expired reservation:', child.key);
+                            cleanupPromises.push(database.ref('repairOrders/' + child.key).remove());
                         }
                     }
                 });
                 
-                // Find next available number (check for collisions)
-                let nextNumber;
-                let attempts = 0;
-                const maxAttempts = 100; // Prevent infinite loop
-                
-                do {
-                    const nextCounter = String(maxCounter + 1 + attempts).padStart(3, '0');
-                    nextNumber = prefix + nextCounter; // e.g., "1025001"
-                    
-                    // Check if this number already exists in database
-                    const existsSnapshot = await database.ref('repairOrders/' + nextNumber).once('value');
-                    
-                    if (!existsSnapshot.exists()) {
-                        // Found an unused number!
-                        // Reserve it immediately to prevent race condition
-                        await database.ref('repairOrders/' + nextNumber).set({
-                            ro_number: nextNumber,
-                            _reserved: true,
-                            _reservedAt: firebase.database.ServerValue.TIMESTAMP
-                        });
-                        console.log('✅ Reserved work order number:', nextNumber);
-                        break;
-                    }
-                    
-                    // Number exists, try next one
-                    console.warn('Work order number collision detected:', nextNumber, '- trying next number');
-                    attempts++;
-                    
-                } while (attempts < maxAttempts);
-                
-                if (attempts >= maxAttempts) {
-                    throw new Error('Could not generate unique work order number after ' + maxAttempts + ' attempts');
+                if (cleanupPromises.length > 0) {
+                    await Promise.all(cleanupPromises);
+                    console.log(`✅ Cleaned up ${cleanupPromises.length} expired reservation(s)`);
                 }
                 
-                console.log('Generated work order number:', nextNumber, attempts > 0 ? '(after ' + attempts + ' collision checks)' : '');
+                // Get fresh data after cleanup
+                const freshSnapshot = await database.ref('repairOrders').once('value');
+                const usedCounters = new Set();
+                
+                // Collect all used counters for this month/year
+                freshSnapshot.forEach((child) => {
+                    const woNum = child.key;
+                    // Check if it matches our format (starts with current month/year prefix)
+                    if (woNum && woNum.startsWith(prefix)) {
+                        const counter = parseInt(woNum.slice(4), 10); // Get last 3 digits
+                        if (!isNaN(counter)) {
+                            usedCounters.add(counter);
+                        }
+                    }
+                });
+                
+                // Find the first available number (fill gaps first, then increment)
+                let nextNumber;
+                let foundCounter = null;
+                
+                // Check for gaps starting from 1
+                for (let i = 1; i <= 999; i++) {
+                    if (!usedCounters.has(i)) {
+                        foundCounter = i;
+                        break;
+                    }
+                }
+                
+                // If all numbers 1-999 are used (unlikely), find next available after highest
+                if (!foundCounter) {
+                    const maxCounter = Math.max(...Array.from(usedCounters));
+                    foundCounter = maxCounter + 1;
+                }
+                
+                const nextCounter = String(foundCounter).padStart(3, '0');
+                nextNumber = prefix + nextCounter; // e.g., "1125001"
+                
+                // Final safety check (should always be available based on our logic above)
+                const existsSnapshot = await database.ref('repairOrders/' + nextNumber).once('value');
+                
+                if (!existsSnapshot.exists()) {
+                    // Reserve it immediately to prevent race condition
+                    await database.ref('repairOrders/' + nextNumber).set({
+                        ro_number: nextNumber,
+                        _reserved: true,
+                        _reservedAt: firebase.database.ServerValue.TIMESTAMP
+                    });
+                    console.log('✅ Reserved work order number:', nextNumber, usedCounters.size > 0 ? `(filled gap, ${usedCounters.size} active)` : '(first of month)');
+                } else {
+                    // Extremely rare race condition - number was just taken
+                    console.warn('⚠️ Race condition detected, number just taken:', nextNumber);
+                    // Fall back to simple increment
+                    const maxCounter = Math.max(0, ...Array.from(usedCounters));
+                    for (let attempts = 1; attempts <= 100; attempts++) {
+                        const fallbackCounter = String(maxCounter + attempts).padStart(3, '0');
+                        const fallbackNumber = prefix + fallbackCounter;
+                        const checkSnapshot = await database.ref('repairOrders/' + fallbackNumber).once('value');
+                        
+                        if (!checkSnapshot.exists()) {
+                            await database.ref('repairOrders/' + fallbackNumber).set({
+                                ro_number: fallbackNumber,
+                                _reserved: true,
+                                _reservedAt: firebase.database.ServerValue.TIMESTAMP
+                            });
+                            nextNumber = fallbackNumber;
+                            console.log('✅ Reserved fallback number:', nextNumber);
+                            break;
+                        }
+                    }
+                }
+                
+                console.log('Generated work order number:', nextNumber);
                 return nextNumber;
             } catch (error) {
                 console.error('Error generating work order number:', error);
@@ -4695,6 +4736,10 @@
                     workOrder.timerStartTime = existingData.timerStartTime;
                     workOrder.timerPausedSeconds = existingData.timerPausedSeconds;
                 }
+                
+                // Remove reservation flags if they exist (should be overwritten by .set anyway)
+                delete workOrder._reserved;
+                delete workOrder._reservedAt;
                 
                 return database.ref('repairOrders/' + woNumber).set(workOrder);
             }).then(() => {
