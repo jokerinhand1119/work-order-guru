@@ -1223,13 +1223,18 @@
             }
             
             #inspection-form-print * {
-                visibility: visible;
+                visibility: visible !important;
             }
             
             #inspection-form-print img {
                 display: block !important;
                 margin: 0 !important;
                 padding: 0 !important;
+            }
+            
+            /* Default state: hide inspection form on screen */
+            .print-only {
+                display: none !important;
             }
             
             /* When inspection is hidden, completely remove it */
@@ -1248,6 +1253,32 @@
                 height: 0 !important;
                 margin: 0 !important;
                 padding: 0 !important;
+            }
+            
+            /* Prevent page breaks within work order sections */
+            .work-order .company-header,
+            .work-order .form-row,
+            .work-order .customer-section,
+            .work-order .parts-section,
+            .work-order .footer-section {
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
+            
+            /* Mobile-specific: reduce margins to fit on one page */
+            @media print and (max-width: 768px) {
+                .work-order {
+                    font-size: 10px;
+                }
+                .work-order input,
+                .work-order textarea {
+                    font-size: 9px !important;
+                    padding: 1px 2px !important;
+                }
+                @page {
+                    size: letter;
+                    margin: 0.3in;
+                }
             }
             
             @page {
@@ -1437,8 +1468,8 @@
     <!-- ===== MOBILE UI (Screen Only) ===== -->
     <div class="app-bar">
         <h1 style="margin:0 auto; flex:1; text-align:center; font-weight:700; letter-spacing:2px; font-size:24px; text-shadow:0 3px 8px rgba(0,0,0,0.3); text-transform:uppercase; display:flex; align-items:center; justify-content:center; gap:12px;">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" style="width:36px;height:36px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3));">
-                <path d="M22 10 L22 18 L16 18 L16 24 L24 24 L24 18 L29 18 L35 12 L33 10 Z M19 27 L11 35 L14 38 L22 30 Z" fill="#fff" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" style="width:36px;height:36px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3));">
+                <path d="M45 24 L45 39 L34 39 L34 50 L50 50 L50 39 L60 39 L73 26 L70 23 Z M39 56 L24 71 L30 77 L45 62 Z" fill="#fff" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>
             </svg>
             <span style="background: linear-gradient(45deg, #fff 0%, #e0e0e0 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">TOOLKIT</span>
         </h1>
@@ -2131,7 +2162,7 @@
         </div>
     </div>
     <!-- ===== INSPECTION FORM (Print Only) ===== -->
-    <div class="print-only" id="inspection-form-print" style="display:none;">
+    <div class="print-only" id="inspection-form-print">
         <img id="inspection-pdf-image" src="" style="width:100%;height:auto;display:block;" />
     </div>
     
@@ -3206,11 +3237,12 @@
                 const hours = (timerPausedSeconds / 3600).toFixed(2);
                 document.getElementById('labor_hours').value = hours;
                 
-                // Save timer state to Firebase
+                // Save timer state AND labor_hours to Firebase for persistence
                 await database.ref('repairOrders/' + woNumber).update({
                     timerActive: false,
                     timerPausedSeconds: timerPausedSeconds,
-                    timerStartTime: null
+                    timerStartTime: null,
+                    labor_hours: hours
                 });
                 
                 btn.innerHTML = '▶️ Start Timer';
@@ -3220,7 +3252,10 @@
                 // Refresh entries to remove indicator
                 loadPreviousEntries();
             } else {
-                // Start timer
+                // Start timer - use current field value as baseline (allows manual edits to persist)
+                const currentFieldValue = parseFloat(document.getElementById('labor_hours').value) || 0;
+                timerPausedSeconds = Math.floor(currentFieldValue * 3600);
+                
                 timerStartTime = Date.now();
                 timerInterval = setInterval(updateTimerDisplay, 100);
                 
@@ -3284,7 +3319,8 @@
                 await database.ref('repairOrders/' + woNumber).update({
                     timerActive: false,
                     timerPausedSeconds: 0,
-                    timerStartTime: null
+                    timerStartTime: null,
+                    labor_hours: ''
                 });
                 
                 // Refresh entries to remove indicator
@@ -3389,10 +3425,14 @@
                     const display = `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
                     document.getElementById('timer-display').textContent = display;
                     
-                    const totalHours = (timerPausedSeconds / 3600).toFixed(2);
+                    // Use saved labor_hours from Firebase if available, otherwise calculate
+                    const totalHours = data.labor_hours || (timerPausedSeconds / 3600).toFixed(2);
                     document.getElementById('labor_hours').value = totalHours;
                 } else {
                     document.getElementById('timer-display').textContent = '0:00:00';
+                    // Load labor_hours from Firebase even if timer is at 0 (manual edits)
+                    const savedHours = data.labor_hours || '';
+                    document.getElementById('labor_hours').value = savedHours;
                 }
                 
                 btn.innerHTML = '▶️ Start Timer';
@@ -4340,9 +4380,35 @@
                     }
                 });
                 
-                // Increment and format as 3-digit counter
-                const nextCounter = String(maxCounter + 1).padStart(3, '0');
-                return prefix + nextCounter; // e.g., "1025001"
+                // Find next available number (check for collisions)
+                let nextNumber;
+                let attempts = 0;
+                const maxAttempts = 100; // Prevent infinite loop
+                
+                do {
+                    const nextCounter = String(maxCounter + 1 + attempts).padStart(3, '0');
+                    nextNumber = prefix + nextCounter; // e.g., "1025001"
+                    
+                    // Check if this number already exists in database
+                    const existsSnapshot = await database.ref('repairOrders/' + nextNumber).once('value');
+                    
+                    if (!existsSnapshot.exists()) {
+                        // Found an unused number!
+                        break;
+                    }
+                    
+                    // Number exists, try next one
+                    console.warn('Work order number collision detected:', nextNumber, '- trying next number');
+                    attempts++;
+                    
+                } while (attempts < maxAttempts);
+                
+                if (attempts >= maxAttempts) {
+                    throw new Error('Could not generate unique work order number after ' + maxAttempts + ' attempts');
+                }
+                
+                console.log('Generated work order number:', nextNumber, attempts > 0 ? '(after ' + attempts + ' collision checks)' : '');
+                return nextNumber;
             } catch (error) {
                 console.error('Error generating work order number:', error);
                 // Fallback: use prefix + 001
@@ -5856,8 +5922,18 @@
             syncMobileFormToPrint();
             
             // Show work order, hide inspection form
-            document.getElementById('work-order-print').classList.remove('hide-for-print');
-            document.getElementById('inspection-form-print').classList.add('hide-for-print');
+            const workOrder = document.getElementById('work-order-print');
+            const inspection = document.getElementById('inspection-form-print');
+            
+            workOrder.classList.remove('hide-for-print');
+            inspection.classList.add('hide-for-print');
+            
+            // Force inline styles as backup (mobile browsers sometimes ignore classes)
+            workOrder.style.display = 'block';
+            workOrder.style.visibility = 'visible';
+            inspection.style.display = 'none';
+            inspection.style.visibility = 'hidden';
+            
             closePrintOptions();
             
             // Populate print divs before printing (not used anymore, but keep for compatibility)
@@ -5937,14 +6013,24 @@
             window.addEventListener('afterprint', function() {
                 cleanupPrintStyles();
                 // Reset visibility
-                document.getElementById('work-order-print').classList.remove('hide-for-print');
-                document.getElementById('inspection-form-print').classList.add('hide-for-print');
+                const workOrder = document.getElementById('work-order-print');
+                const inspection = document.getElementById('inspection-form-print');
+                workOrder.classList.remove('hide-for-print');
+                inspection.classList.add('hide-for-print');
+                // Clear inline styles
+                workOrder.style.display = '';
+                workOrder.style.visibility = '';
+                inspection.style.display = '';
+                inspection.style.visibility = '';
             }, { once: true });
             
-            // Small delay to ensure styles are applied before printing
+            // Mobile needs longer delay to process styles
+            const isMobile = isMobileDevice();
+            const printDelay = isMobile ? 300 : 100;
+            
             setTimeout(() => {
                 window.print();
-            }, 100);
+            }, printDelay);
         }
 
         async function printInspectionOnly() {
@@ -5952,9 +6038,20 @@
             syncMobileFormToPrint();
             
             closePrintOptions();
+            
             // Hide work order, show inspection form only
-            document.getElementById('work-order-print').classList.add('hide-for-print');
-            document.getElementById('inspection-form-print').classList.remove('hide-for-print');
+            const workOrder = document.getElementById('work-order-print');
+            const inspection = document.getElementById('inspection-form-print');
+            
+            workOrder.classList.add('hide-for-print');
+            inspection.classList.remove('hide-for-print');
+            
+            // Force inline styles as backup (mobile browsers sometimes ignore classes)
+            workOrder.style.display = 'none';
+            workOrder.style.visibility = 'hidden';
+            inspection.style.display = 'block';
+            inspection.style.visibility = 'visible';
+            
             // Fill and prepare inspection form, then print
             await fillAndPrintInspectionForm();
         }
@@ -5964,9 +6061,19 @@
             syncMobileFormToPrint();
             
             closePrintOptions();
+            
             // Show both work order and inspection form
-            document.getElementById('work-order-print').classList.remove('hide-for-print');
-            document.getElementById('inspection-form-print').classList.remove('hide-for-print');
+            const workOrder = document.getElementById('work-order-print');
+            const inspection = document.getElementById('inspection-form-print');
+            
+            workOrder.classList.remove('hide-for-print');
+            inspection.classList.remove('hide-for-print');
+            
+            // Force inline styles as backup (mobile browsers sometimes ignore classes)
+            workOrder.style.display = 'block';
+            workOrder.style.visibility = 'visible';
+            inspection.style.display = 'block';
+            inspection.style.visibility = 'visible';
             
             // Prepare work order HTML print (same as printWorkOrderOnly but without calling window.print)
             autoResizePrintFields();
@@ -6196,8 +6303,15 @@
                     
                     // Reset visibility after printing
                     window.addEventListener('afterprint', function resetAfterPrint() {
-                        document.getElementById('work-order-print').classList.remove('hide-for-print');
-                        document.getElementById('inspection-form-print').classList.add('hide-for-print');
+                        const workOrder = document.getElementById('work-order-print');
+                        const inspection = document.getElementById('inspection-form-print');
+                        workOrder.classList.remove('hide-for-print');
+                        inspection.classList.add('hide-for-print');
+                        // Clear inline styles
+                        workOrder.style.display = '';
+                        workOrder.style.visibility = '';
+                        inspection.style.display = '';
+                        inspection.style.visibility = '';
                         window.removeEventListener('afterprint', resetAfterPrint);
                     });
                 }, printDelay);
