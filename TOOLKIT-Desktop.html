@@ -4689,26 +4689,42 @@ async function generateNextWorkOrderNumber() {
         const prefix = month + year; // e.g., "1025" for October 2025
         
         const snapshot = await db.ref('repairOrders').once('value');
-        let maxCounter = 0;
+        const usedCounters = new Set();
         
-        // Find the highest counter for this month/year
+        // Collect all used counters for this month/year
         snapshot.forEach((child) => {
             const woNum = child.key;
             // Check if it matches our format (starts with current month/year prefix)
             if (woNum && woNum.startsWith(prefix)) {
                 const counter = parseInt(woNum.slice(4), 10); // Get last 3 digits
-                if (!isNaN(counter) && counter > maxCounter) {
-                    maxCounter = counter;
+                if (!isNaN(counter)) {
+                    usedCounters.add(counter);
                 }
             }
         });
         
-        // Increment and format as 3-digit counter
-        const nextCounter = String(maxCounter + 1).padStart(3, '0');
-        const nextNumber = prefix + nextCounter; // e.g., "1025001"
+        // Find the first available number (fill gaps first, then increment)
+        let foundCounter = null;
+        
+        // Check for gaps starting from 1
+        for (let i = 1; i <= 999; i++) {
+            if (!usedCounters.has(i)) {
+                foundCounter = i;
+                break;
+            }
+        }
+        
+        // If all numbers 1-999 are used (unlikely), find next available after highest
+        if (!foundCounter) {
+            const maxCounter = Math.max(...Array.from(usedCounters));
+            foundCounter = maxCounter + 1;
+        }
+        
+        const nextCounter = String(foundCounter).padStart(3, '0');
+        const nextNumber = prefix + nextCounter; // e.g., "1125001"
         
         roField.value = nextNumber;
-        console.log('Generated work order number:', nextNumber);
+        console.log('Generated work order number:', nextNumber, usedCounters.size > 0 ? `(filled gap, ${usedCounters.size} active)` : '(first of month)');
         return nextNumber;
     } catch (error) {
         console.error('Error generating work order number:', error);
