@@ -4394,6 +4394,13 @@
                     
                     if (!existsSnapshot.exists()) {
                         // Found an unused number!
+                        // Reserve it immediately to prevent race condition
+                        await database.ref('repairOrders/' + nextNumber).set({
+                            ro_number: nextNumber,
+                            _reserved: true,
+                            _reservedAt: firebase.database.ServerValue.TIMESTAMP
+                        });
+                        console.log('✅ Reserved work order number:', nextNumber);
                         break;
                     }
                     
