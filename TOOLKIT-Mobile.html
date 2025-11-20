@@ -2324,6 +2324,14 @@
                 // Setup connection monitoring
                 setupConnectionMonitoring();
                 
+                // Generate work order number AFTER companyId is set
+                generateWorkOrderNumber().then(woNumber => {
+                    const woField = document.getElementById('work_order_number');
+                    if (woField) woField.value = woNumber;
+                }).catch(err => {
+                    console.error('Error generating work order number:', err);
+                });
+                
                 // NOW load work orders after companyId is set
                 loadPreviousEntries();
             }
@@ -5353,9 +5361,7 @@
             document.getElementById('date').value = `${month}/${day}/${year}`;
             
             // Auto-generate work order number on page load
-            const woField = document.getElementById('work_order_number');
-            const woNumber = await generateWorkOrderNumber();
-            if (woField) woField.value = woNumber;
+            // MOVED TO initializeApp() - needs to wait for authentication/companyId
             
             // Don't call loadPreviousEntries() here - it's called after authentication in initializeApp()
             
