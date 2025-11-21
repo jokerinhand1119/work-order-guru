@@ -1161,12 +1161,13 @@
                 visibility: hidden;
             }
             
-            /* Show the work order form (desktop structure) and its children */
-            .work-order, .work-order * {
+            /* Show the work order form when NOT hidden */
+            .work-order:not(.hide-for-print), 
+            .work-order:not(.hide-for-print) * {
                 visibility: visible;
             }
             
-            .work-order {
+            .work-order:not(.hide-for-print) {
                 display: block !important; /* Override the display:none from screen styles */
                 position: relative;
                 margin: 0 !important;
@@ -1212,8 +1213,8 @@
                 padding: 0 !important;
             }
             
-            /* Show inspection form print section when visible */
-            #inspection-form-print {
+            /* Show inspection form print section when NOT hidden */
+            #inspection-form-print:not(.hide-for-print) {
                 visibility: visible !important;
                 display: block !important;
                 position: relative;
@@ -1223,11 +1224,11 @@
                 padding: 0 !important;
             }
             
-            #inspection-form-print * {
+            #inspection-form-print:not(.hide-for-print) * {
                 visibility: visible !important;
             }
             
-            #inspection-form-print img {
+            #inspection-form-print:not(.hide-for-print) img {
                 display: block !important;
                 margin: 0 !important;
                 padding: 0 !important;
