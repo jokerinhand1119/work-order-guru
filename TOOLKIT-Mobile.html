@@ -6377,9 +6377,12 @@
                     console.log('Triggering print...');
                     window.print();
                     
-                    // Restore work order after print dialog closes
+                    // Restore work order after print completes
+                    // On Android, the printer may re-render after preview, so keep work order removed for 10 seconds
                     if (inspectionOnly && removedWorkOrder) {
-                        window.addEventListener('afterprint', function restoreWorkOrder() {
+                        const restoreDelay = isMobile ? 10000 : 2000; // 10 seconds on mobile to ensure printer finishes
+                        console.log('Will restore work order after ' + restoreDelay + 'ms');
+                        setTimeout(() => {
                             if (workOrderParent) {
                                 if (workOrderNextSibling) {
                                     workOrderParent.insertBefore(removedWorkOrder, workOrderNextSibling);
@@ -6388,8 +6391,7 @@
                                 }
                                 console.log('Restored work order to DOM');
                             }
-                            window.removeEventListener('afterprint', restoreWorkOrder);
-                        });
+                        }, restoreDelay);
                     }
                 }, printDelay);
                 
