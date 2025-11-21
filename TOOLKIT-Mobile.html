@@ -4259,6 +4259,18 @@
         
         // Sync data to print fields before printing
         window.addEventListener('beforeprint', function() {
+            // Detect which form is being printed FIRST
+            const workOrderDiv = document.getElementById('work-order-print');
+            const inspectionDiv = document.getElementById('inspection-form-print');
+            const isPrintingWorkOrder = workOrderDiv && !workOrderDiv.classList.contains('hide-for-print');
+            const isPrintingInspection = inspectionDiv && !inspectionDiv.classList.contains('hide-for-print');
+            
+            // If only printing inspection, skip all work order syncing
+            if (isPrintingInspection && !isPrintingWorkOrder) {
+                console.log('Printing INSPECTION ONLY - skipping work order sync');
+                return;
+            }
+            
             // All basic text fields that map directly
             const basicFields = [
                 'customer_name', 'phone_number', 'work_order_number', 'date',
@@ -4303,12 +4315,7 @@
             const ymm = document.getElementById('print_year_make_model');
             const printTrim = document.getElementById('print_trim');
             
-            // Detect which form is being printed
-            const workOrderDiv = document.getElementById('work-order-print');
-            const inspectionDiv = document.getElementById('inspection-form-print');
-            const isPrintingWorkOrder = workOrderDiv && !workOrderDiv.classList.contains('hide-for-print');
-            const isPrintingInspection = inspectionDiv && !inspectionDiv.classList.contains('hide-for-print');
-            
+            // Use the variables already declared at the top of this function
             console.log('Print Detection:', {
                 isPrintingWorkOrder,
                 isPrintingInspection,
