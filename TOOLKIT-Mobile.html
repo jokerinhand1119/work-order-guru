@@ -1164,7 +1164,7 @@
             /* Show the work order form when NOT hidden */
             .work-order:not(.hide-for-print), 
             .work-order:not(.hide-for-print) * {
-                visibility: visible;
+                visibility: visible !important;
             }
             
             .work-order:not(.hide-for-print) {
@@ -5995,12 +5995,6 @@
             workOrder.classList.remove('hide-for-print');
             inspection.classList.add('hide-for-print');
             
-            // Force inline styles as backup (mobile browsers sometimes ignore classes)
-            workOrder.style.display = 'block';
-            workOrder.style.visibility = 'visible';
-            inspection.style.display = 'none';
-            inspection.style.visibility = 'hidden';
-            
             closePrintOptions();
             
             // Populate print divs before printing (not used anymore, but keep for compatibility)
@@ -6079,16 +6073,11 @@
             // Listen for print dialog events
             window.addEventListener('afterprint', function() {
                 cleanupPrintStyles();
-                // Reset visibility
+                // Reset classes to default state
                 const workOrder = document.getElementById('work-order-print');
                 const inspection = document.getElementById('inspection-form-print');
                 workOrder.classList.remove('hide-for-print');
                 inspection.classList.add('hide-for-print');
-                // Clear inline styles
-                workOrder.style.display = '';
-                workOrder.style.visibility = '';
-                inspection.style.display = '';
-                inspection.style.visibility = '';
             }, { once: true });
             
             // Mobile needs longer delay to process styles
@@ -6113,12 +6102,6 @@
             workOrder.classList.add('hide-for-print');
             inspection.classList.remove('hide-for-print');
             
-            // Force inline styles as backup (mobile browsers sometimes ignore classes)
-            workOrder.style.display = 'none';
-            workOrder.style.visibility = 'hidden';
-            inspection.style.display = 'block';
-            inspection.style.visibility = 'visible';
-            
             // Fill and prepare inspection form, then print
             await fillAndPrintInspectionForm();
         }
@@ -6135,12 +6118,6 @@
             
             workOrder.classList.remove('hide-for-print');
             inspection.classList.remove('hide-for-print');
-            
-            // Force inline styles as backup (mobile browsers sometimes ignore classes)
-            workOrder.style.display = 'block';
-            workOrder.style.visibility = 'visible';
-            inspection.style.display = 'block';
-            inspection.style.visibility = 'visible';
             
             // Prepare work order HTML print (same as printWorkOrderOnly but without calling window.print)
             autoResizePrintFields();
@@ -6374,11 +6351,6 @@
                         const inspection = document.getElementById('inspection-form-print');
                         workOrder.classList.remove('hide-for-print');
                         inspection.classList.add('hide-for-print');
-                        // Clear inline styles
-                        workOrder.style.display = '';
-                        workOrder.style.visibility = '';
-                        inspection.style.display = '';
-                        inspection.style.visibility = '';
                         window.removeEventListener('afterprint', resetAfterPrint);
                     });
                 }, printDelay);
