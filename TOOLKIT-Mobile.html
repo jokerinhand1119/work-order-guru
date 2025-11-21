@@ -6095,15 +6095,8 @@
             
             closePrintOptions();
             
-            // Hide work order, show inspection form only
-            const workOrder = document.getElementById('work-order-print');
-            const inspection = document.getElementById('inspection-form-print');
-            
-            workOrder.classList.add('hide-for-print');
-            inspection.classList.remove('hide-for-print');
-            
-            // Fill and prepare inspection form, then print
-            await fillAndPrintInspectionForm();
+            // Fill inspection form first, then handle printing
+            await fillAndPrintInspectionForm(true); // Pass true to indicate inspection-only mode
         }
 
         async function printBoth() {
@@ -6111,13 +6104,6 @@
             syncMobileFormToPrint();
             
             closePrintOptions();
-            
-            // Show both work order and inspection form
-            const workOrder = document.getElementById('work-order-print');
-            const inspection = document.getElementById('inspection-form-print');
-            
-            workOrder.classList.remove('hide-for-print');
-            inspection.classList.remove('hide-for-print');
             
             // Prepare work order HTML print (same as printWorkOrderOnly but without calling window.print)
             autoResizePrintFields();
@@ -6158,11 +6144,11 @@
                 }
             });
             
-            // Fill inspection form PDF, which will trigger window.print when ready
-            await fillAndPrintInspectionForm();
+            // Fill inspection form PDF and print both (inspectionOnly = false, so work order stays in DOM)
+            await fillAndPrintInspectionForm(false);
         }
 
-        async function fillAndPrintInspectionForm() {
+        async function fillAndPrintInspectionForm(inspectionOnly = false) {
             // Detect mobile device once at the start
             const isMobile = isMobileDevice();
             console.log(`Print mode: ${isMobile ? 'Mobile/Tablet' : 'Desktop'}`);
@@ -6340,19 +6326,42 @@
                 const printDelay = isMobile ? 2000 : 500;
                 console.log(`Waiting ${printDelay}ms before printing (${isMobile ? 'mobile' : 'desktop'} mode)`);
                 
-                // Trigger print after image is loaded (inspection form stays hidden on screen, shows in print)
+                // For inspection-only, physically remove work order from DOM to force Android Chrome to only print inspection
+                let removedWorkOrder = null;
+                let workOrderParent = null;
+                let workOrderNextSibling = null;
+                
+                if (inspectionOnly) {
+                    const workOrder = document.getElementById('work-order-print');
+                    if (workOrder) {
+                        // Store position for restoration
+                        workOrderParent = workOrder.parentNode;
+                        workOrderNextSibling = workOrder.nextSibling;
+                        // Physically remove from DOM
+                        removedWorkOrder = workOrderParent.removeChild(workOrder);
+                        console.log('Removed work order from DOM for inspection-only print');
+                    }
+                }
+                
+                // Trigger print after image is loaded
                 setTimeout(() => {
                     console.log('Triggering print...');
                     window.print();
                     
-                    // Reset visibility after printing
-                    window.addEventListener('afterprint', function resetAfterPrint() {
-                        const workOrder = document.getElementById('work-order-print');
-                        const inspection = document.getElementById('inspection-form-print');
-                        workOrder.classList.remove('hide-for-print');
-                        inspection.classList.add('hide-for-print');
-                        window.removeEventListener('afterprint', resetAfterPrint);
-                    });
+                    // Restore work order after print dialog closes
+                    if (inspectionOnly && removedWorkOrder) {
+                        window.addEventListener('afterprint', function restoreWorkOrder() {
+                            if (workOrderParent) {
+                                if (workOrderNextSibling) {
+                                    workOrderParent.insertBefore(removedWorkOrder, workOrderNextSibling);
+                                } else {
+                                    workOrderParent.appendChild(removedWorkOrder);
+                                }
+                                console.log('Restored work order to DOM');
+                            }
+                            window.removeEventListener('afterprint', restoreWorkOrder);
+                        });
+                    }
                 }, printDelay);
                 
             } catch (error) {
