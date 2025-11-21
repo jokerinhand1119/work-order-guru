@@ -1174,6 +1174,27 @@
                 padding: 0 !important;
             }
             
+            /* Show the inspection form (print-only class) and its children */
+            #inspection-form-print,
+            #inspection-form-print * {
+                visibility: visible !important;
+                display: block !important;
+            }
+            
+            #inspection-form-print {
+                position: relative;
+                margin: 0 !important;
+                padding: 0 !important;
+                width: 100% !important;
+                height: auto !important;
+            }
+            
+            #inspection-form-print img {
+                display: block !important;
+                width: 100% !important;
+                height: auto !important;
+            }
+            
             /* When work order is hidden, completely remove it from layout */
             .work-order.hide-for-print,
             .work-order.hide-for-print * {
@@ -1237,6 +1258,14 @@
             /* Default state: hide inspection form on screen */
             .print-only {
                 display: none !important;
+            }
+            
+            /* Show inspection form in print media */
+            @media print {
+                .print-only {
+                    display: block !important;
+                    visibility: visible !important;
+                }
             }
             
             /* When inspection is hidden, completely remove it */
